@@ -27,7 +27,6 @@ param (
 $VerbosePreference = "SilentlyContinue"
     
 # Set Preferences
-Import-Module Az.Accounts
 Import-Module Az.Resources
     
 $VerbosePreference = "Continue"
