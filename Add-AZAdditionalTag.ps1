@@ -4,7 +4,7 @@
        Adds an additional Tag (Name\Value) to any Azure Resource with a specified pre-existing tag.
 
     .INPUTS
-        targetTagName = OS type that will be placed in the AZ Graph Query.
+        targetTagName = Existing tag name.
         additionalTagName = Tag name to Add
         additionalTagValue = Additional Tag Value to Add
 
