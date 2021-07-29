@@ -2,7 +2,7 @@
 <#
 
     .DESCRIPTION
-       Gets SAS token using a Azure ARC Server's managed identity. 
+       Gets SAS token using a Azure Arc Server's managed identity. 
 
     .INPUTS
         containerName      - Blob name
@@ -20,6 +20,8 @@
     .NOTES
     
         - This script needs to be run on the Azure Arc enabled server.
+        - If you are using Private Endpoints on the Azure Storage, the Arc Server's managed identity MUST have the OWNER role of the
+            RESOURCE GROUP which contains the storage account.
 
 
 #>
@@ -92,7 +94,7 @@ $request =
 {
     "canonicalizedResource":"/blob/$storageAccountName/$containerName",
     "signedResource":"c",              // The kind of resource accessible with the SAS, in this case a container (c).
-    "signedPermission":"rcw",          // Permissions for this SAS, in this case (r)ead, (c)reate, and (w)rite. Order is important.
+    "signedPermission":"rcwl",          // Permissions for this SAS, in this case (r)ead, (c)reate, and (w)rite. Order is important.
     "signedProtocol":"https",          // Require the SAS be used on https protocol.
     "signedExpiry":"$expDate"          // UTC expiration time for SAS in ISO 8601 format, for example 2017-09-22T00:06:00Z.
 }
