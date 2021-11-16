@@ -2,10 +2,10 @@
 
 # Set String Data
 
-$VMName = 'Blah3'
-$ResourceGroupName = 'BLAHBLAH_GROUP'
-$workspaceID = '<workspace id here!>'
-$workspaceKey = '<workspace key here!>'
+$VMName = 'Jaytest'
+$ResourceGroupName = 'jaytest_group'
+$workspaceID = 'xxxxxxxxxxxxx'
+$workspaceKey = 'xxxxxxxxxxxxx'
  
 
 # Set Preferences 
@@ -20,7 +20,8 @@ Write-Verbose $VM
 
 # Get all extensions for that VM
 
-$workSpaces = ((Get-AzVMExtension -VMName $VMName -ResourceGroupName $VM.ResourceGroupName).PublicSettings | ConvertFrom-JSON).WorkspaceID
+$workSpaces = (Get-AzVMExtension -VMName $VMName -ResourceGroupName $VM.ResourceGroupName).PublicSettings 
+$workSpaces = ($workSpaces | Where-Object {$_ -match '"workspaceId"'} | ConvertFrom-Json).workspaceId
 
 Write-Verbose 'Attached Workspaces'
 Write-Verbose '==================='
