@@ -20,39 +20,39 @@ $subscriptions = Get-AzSubscription
 
 try {
 
-foreach ($subscription in $subscriptions) {
+    foreach ($subscription in $subscriptions) {
 
-    # Set Context to subscription
+        # Set Context to subscription
 
-    Write-Verbose -Message "=============================================================="
-    Write-Verbose -Message "Setting Context to $($subscription.Name)-($($subscription.id))"
-    Set-AzContext -SubscriptionObject $subscription | Out-Null
+        Write-Verbose -Message "=============================================================="
+        Write-Verbose -Message "Setting Context to $($subscription.Name)-($($subscription.id))"
+        Set-AzContext -SubscriptionObject $subscription | Out-Null
 
-    # Check for ResourceGroupName in Subscription
+        # Check for ResourceGroupName in Subscription
 
-    $rgCheck = Get-AzResourceGroup | Where-Object { $_.ResourceGroupName -eq $ResourceGroupName }
+        $rgCheck = Get-AzResourceGroup | Where-Object { $_.ResourceGroupName -eq $ResourceGroupName }
 
-    # Create Resource Group if that Resource Group is not present in subscription
+        # Create Resource Group if that Resource Group is not present in subscription
 
-    if (!$rgCheck) {
+        if (!$rgCheck) {
 
-        Write-Verbose -Message `
-            "Could not find RG: $ResourceGroupName. Adding ResourceGroup to subscription $($subscription.Name)-($($subscription.id))."
+            Write-Verbose -Message `
+                "Could not find RG: $ResourceGroupName. Adding ResourceGroup to subscription $($subscription.Name)-($($subscription.id))."
 
-        New-AzResourceGroup -Name $ResourceGroupName -Location $ResourceGroupLocation  | Out-Null
+            New-AzResourceGroup -Name $ResourceGroupName -Location $ResourceGroupLocation  | Out-Null
 
-        $rgCheck = Get-AzResourceGroup | Where-Object { $_.Name -eq $ResourceGroupName }
-        if (!$rgCheck) { Write-Verbose "Successfully created RG: $ResourceGroupName" }
+            $rgCheck = Get-AzResourceGroup | Where-Object { $_.Name -eq $ResourceGroupName }
+            if (!$rgCheck) { Write-Verbose "Successfully created RG: $ResourceGroupName" }
 
-    }
-    else {
+        }
+        else {
     
-        Write-Verbose  "RG: $ResourceGroupName was found. Skipping this subscription"
+            Write-Verbose  "RG: $ResourceGroupName was found. Skipping this subscription"
+
+        }
+
 
     }
-
-
-}
 }
 catch {
 
