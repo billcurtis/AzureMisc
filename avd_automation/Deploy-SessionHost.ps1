@@ -16,8 +16,6 @@ $AutomationAccountName = "private-automation"
 $AutomationAccountResourceGroupName = "peautomation-rg"
 $localadminAutomationCreName = "LocalAdmin"
 $VMLocation = "eastUS2"
-$WorkspaceID = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-$WorkspaceKey  = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 $WorkspaceIDvariable = "LAworkspaceID"
 $WorkspaceKeyvariable = "LAworkspacekey"
 
@@ -46,7 +44,6 @@ catch {
         throw $_.Exception
     }
 }
-
 
 # Deploy the VM
 
