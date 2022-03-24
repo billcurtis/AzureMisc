@@ -173,4 +173,5 @@ $params = @{
 
 New-AzVM @params | Out-Null
 
+Write-Verbose -Message "End runbook Deploy-SessionHostVM"
 

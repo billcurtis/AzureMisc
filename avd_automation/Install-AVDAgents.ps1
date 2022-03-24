@@ -1,3 +1,6 @@
+# This script is meant to be called from the Register-SessionHost Azure Automation Runbook.
+
+# This script downloads and then installs the Azure Virtual Desktop Agent and the Azure Bootloader agent INSIDE of the Session Host virtual machine.
 
 param ($RegistrationToken)
 
@@ -21,3 +24,8 @@ Start-Process -FilePath "msiexec.exe" -ArgumentList "/i C:\Users\TempDirectory\A
 
 # Install AVD Bootloader
 Start-Process -FilePath "msiexec.exe" -ArgumentList "/i C:\Users\TempDirectory\AVDBootLoader.msi", "/quiet", "/qn", "/norestart", "/passive", "/l* C:\Users\TempDirectory\AgentBootLoaderInstall.txt" -Wait -Passthru | Out-Null
+
+
+# (Optional) Remove the C:\Users\TempDirectory
+
+#Remove-Item -Path "C:\Users\TempDirectory"  -Force -Recurse -Confirm $false

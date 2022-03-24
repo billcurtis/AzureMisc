@@ -158,6 +158,10 @@ $WorkspaceKey = (Get-AzAutomationVariable @params).Value
 
 Write-Verbose -Message "Workspace key is: $WorkspaceKey"
 
+<#
+
+Use only when not deploying with Policy.  You should deploy with Azure Policy
+
 Write-Verbose -Message "Installing Azure Monitor"
 
 $PublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true" }
@@ -165,7 +169,7 @@ $ProtectedSettings = @{"workspaceKey" = $WorkspaceKey }
 
 $params = @{
 
-    Name               = 'MicrosoftMonitoringAgent'
+    ExtensionName      = 'Microsoft.EnterpriseCloud.Monitoring'
     ExtensionType      = 'MicrosoftMonitoringAgent'
     Publisher          = 'Microsoft.EnterpriseCloud.Monitoring' 
     ResourceGroupName  = $resourceGroupName
@@ -179,6 +183,8 @@ $params = @{
 }
 
 Set-AzVMExtension @params | Out-Null
+
+
 
 # Deploy the Dependency Agent
 Write-Verbose -Message "Deploying the dependency agent"
@@ -196,7 +202,10 @@ $params = @{
 }
 
 Set-AzVMExtension @params | Out-Null
+#>
 
+
+Write-Verbose -Message "End runbook Deploy-SessionHostExtensions"
 
 
 

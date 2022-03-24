@@ -1,34 +1,118 @@
+<#
+    .DESCRIPTION
 
+       Registers the created VM as a session host.
+
+    .INPUTS
+       
+       AVDHostPoolName = The AVD host pool name where the VM will be associated.
+
+       AVDResourceGroupName = The AVD Resource Group name in which the AVD host pool is contained.
+
+       virtualMachineName -  The name of the virtual machine name.
+
+       resourceGroupName - The resource group which contains the target VM.
+
+       VMLocation - The location of the target VM.
+
+
+    .NOTES
+
+    #>
+
+param (
+
+    [string]$AVDHostPoolName,
+    [string]$AVDResourceGroupName,
+    [string]$resourceGroupName,
+    [string]$virtualMachineName,
+    [string]$VMLocation
+
+)
+
+# Set Preferences
+
+$ErrorActionPreference = 'Stop'
+$VerbosePreference = "SilentlyContinue"
+
+# Import Required Modules
+Import-Module Az.Accounts
+Import-Module Az.Compute
+Import-Module Az.DesktopVirtualization
+
+# Set Preferences 
+
+$ErrorActionPreference = 'Stop'
+$VerbosePreference = "Continue"
+
+# Log Inputs
+
+Write-Verbose -Message "To Do: Put all the inputs here for debugging" 
+
+# Get the connection Name
+
+$connectionName = "AzureRunAsConnection"
+try {
+    
+    Write-Verbose -Message "Getting the Azure Automation Connection"
+
+    $servicePrincipalConnection = Get-AutomationConnection -Name $connectionName   
+    
+    Write-Verbose -Message "Adding the Azure Account"
+
+    Add-AzAccount `
+        -ServicePrincipal `
+        -TenantId $servicePrincipalConnection.TenantId `
+        -ApplicationId $servicePrincipalConnection.ApplicationId `
+        -CertificateThumbprint $servicePrincipalConnection.CertificateThumbprint `
+    | Out-Null
+}
+catch {
+    if (!$servicePrincipalConnection) {
+        $ErrorMessage = "Connection $connectionName not found."
+        throw $ErrorMessage
+    }
+    else {
+        Write-Error -Message $_.Exception
+        throw $_.Exception
+    }
+}
+
+
+
+# Get Registration Token that will be passed to the Virtual Machine
+
+Write-Verbose -Message "Getting Registration Token for AVD"
+
+$params = @{
+
+
+    HostPoolName      = $AVDHostPoolName
+    ResourceGroupName = $AVDResourceGroupName
+    ExpirationTime    = $((get-date).ToUniversalTime().AddDays(1).ToString('yyyy-MM-ddTHH:mm:ss.fffffffZ')) 
+
+}
+
+$RegistrationToken = (New-AzWvdRegistrationInfo @params).Token
 
 
 
 # Deploy Custom Script Extension to download the AVD Agent
 
+Write-Verbose -Message "Deploying the Custom Script Extension - Installing script Install-AVDAgents.ps1"
+
 $params = @{
 
 
-    Name = "DownloadAVDAgent"
-    FileUri = "https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH"
-    ResourceGroupName  = $resourceGroupName
-    VMName             = $virtualMachineName
-    Location           = $VMLocation
-    Run     =  "notepad.exe"
+    Name              = "CustomScriptExtension"
+    FileUri           = "https://raw.githubusercontent.com/billcurtis/AzureMisc/master/avd_automation/Install-AVDAgents.ps1"
+    ResourceGroupName = $resourceGroupName
+    VMName            = $virtualMachineName
+    Location          = $VMLocation
+    Run               = "Install-AVDAgents.ps1 -RegistrationToken $RegistrationToken"
 
 }
 
-Set-AzVMCustomScriptExtension @params
+Set-AzVMCustomScriptExtension @params | Out-Null
 
-
-
-New-AzWvdRegistrationInfo -HostPoolName  wvdpool01 -ResourceGroupName wvdcentral-rg -ExpirationTime $((get-date).ToUniversalTime().AddDays(1).ToString('yyyy-MM-ddTHH:mm:ss.fffffffZ')) 
-
-
-## Silent Install Strings 
-
-https://christiaanbrinkhoff.com/2020/05/01/windows-virtual-desktop-technical-2020-spring-update-arm-based-model-deployment-walkthrough/ 
-
-## Azure Virtual Desktop Agent
-https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv
-
-## Azure Bootloader Agent
-https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH
+Write-Verbose -Message "End runbook Register-SessionHost.ps1"

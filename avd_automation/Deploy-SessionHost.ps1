@@ -1,7 +1,9 @@
 
+# This is an example script to show how to call multiple runbooks to create session hosts.
+
 # Input Variables
 
-$virtualMachineName = "Test003"
+$virtualMachineName = "Test006"
 $virtualMachineSize = "Standard_DS3_v2"
 $resourceGroupName = "wvdcentral-rg"
 $VirtualNetworkName = "wvdcentral-vnet"
@@ -18,7 +20,8 @@ $localadminAutomationCreName = "LocalAdmin"
 $VMLocation = "eastUS2"
 $WorkspaceIDvariable = "LAworkspaceID"
 $WorkspaceKeyvariable = "LAworkspacekey"
-
+$AVDHostPoolName = 'wvdpool01'
+$AVDResourceGroupName = 'wvdcentral-rg'
 
 # Get the connection Name
 
@@ -62,7 +65,7 @@ catch {
 		-localadminAutomationCreName $localadminAutomationCreName
 
 
-# Add the VM Extensions
+<# Add the VM Extensions
 
 .\Deploy-SessionHostExtensions.ps1 `
 		-AutomationAccountName $AutomationAccountName `
@@ -74,3 +77,13 @@ catch {
 		-domainAutomationVariable $domainAutomationVariable `
 		-WorkspaceIDvariable $WorkspaceIDvariable `
 		-WorkspaceKeyvariable $WorkspaceKeyvariable
+#>
+
+# Register the Session Host
+
+.\Register-SessionHost.ps1 `
+		-ResourceGroupName $resourceGroupName `
+		-virtualMachineName $virtualMachineName `
+		-VMLocation $VMLocation `
+		-avdHostPoolName $AVDHostPoolName `
+		-AVDResourceGroupName $AVDResourceGroupName
