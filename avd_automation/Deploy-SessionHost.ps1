@@ -18,10 +18,10 @@ $AutomationAccountName = "private-automation"
 $AutomationAccountResourceGroupName = "peautomation-rg"
 $localadminAutomationCreName = "LocalAdmin"
 $VMLocation = "eastUS2"
-$WorkspaceIDvariable = "LAworkspaceID"
-$WorkspaceKeyvariable = "LAworkspacekey"
 $AVDHostPoolName = 'wvdpool01'
 $AVDResourceGroupName = 'wvdcentral-rg'
+#$WorkspaceIDvariable = "LAworkspaceID"
+#$WorkspaceKeyvariable = "LAworkspacekey"
 
 # Get the connection Name
 
@@ -65,7 +65,7 @@ catch {
 		-localadminAutomationCreName $localadminAutomationCreName
 
 
-<# Add the VM Extensions
+#  Add the VM Extensions
 
 .\Deploy-SessionHostExtensions.ps1 `
 		-AutomationAccountName $AutomationAccountName `
@@ -77,9 +77,9 @@ catch {
 		-domainAutomationVariable $domainAutomationVariable `
 		-WorkspaceIDvariable $WorkspaceIDvariable `
 		-WorkspaceKeyvariable $WorkspaceKeyvariable
-#>
 
-# Register the Session Host
+
+# Download token, agents, and session hosts.
 
 .\Register-SessionHost.ps1 `
 		-ResourceGroupName $resourceGroupName `
@@ -87,3 +87,11 @@ catch {
 		-VMLocation $VMLocation `
 		-avdHostPoolName $AVDHostPoolName `
 		-AVDResourceGroupName $AVDResourceGroupName
+
+
+# Install Office 365
+
+.\Install-Office365.ps1 `
+		-ResourceGroupName $resourceGroupName `
+		-virtualMachineName $virtualMachineName `
+		-VMLocation $VMLocation

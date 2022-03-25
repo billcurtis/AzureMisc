@@ -35,8 +35,8 @@ param (
     [string]$domainAutomationVariable,
     [string]$AutomationAccountName,
     [string]$AutomationAccountResourceGroupName,
-    [string]$WorkspaceIDvariable,
-    [string]$WorkspaceKeyvariable
+    #[string]$WorkspaceIDvariable,
+    #[string]$WorkspaceKeyvariable
     
 )    
 
@@ -129,7 +129,7 @@ $params = @{
 }
 
 Set-AzVMADDomainExtension  @params | Out-Null
-
+<#
 # Join the VM to the log analytics workspace
 
 # Get LA Workspace ID
@@ -158,7 +158,7 @@ $WorkspaceKey = (Get-AzAutomationVariable @params).Value
 
 Write-Verbose -Message "Workspace key is: $WorkspaceKey"
 
-<#
+
 
 Use only when not deploying with Policy.  You should deploy with Azure Policy
 
