@@ -1,0 +1,22 @@
+{
+    "properties": {
+        "displayName": "[custom]Deny Creation of Azure Private DNS Zones",
+        "policyType": "Custom",
+        "mode": "All",
+        "description": "Denies the creation of Azure Private DNS Zones.",
+        "parameters": {},
+        "policyRule": {
+            "if": {
+                "allOf": [
+                    {
+                        "field": "type",
+                        "equals": "Microsoft.Network/privateDnsZones"
+                    }
+                ]
+            },
+            "then": {
+                "effect": "deny"
+            }
+        }
+    }
+}
