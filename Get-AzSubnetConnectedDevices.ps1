@@ -17,8 +17,6 @@
 
 #>
 
-
-
 # Load Modules
 Import-Module -Name Az.Accounts
 Import-Module -Name Az.Network
@@ -83,6 +81,6 @@ foreach ($ipConfig in $subnet.IpConfigurations) {
 
 $Report
 
-$Report | Out-GridView -Title 'Results' -OutputMode None
+$Report | Sort-Object Device | Out-GridView -Title 'Results' -OutputMode None
 
 # 
