@@ -21,7 +21,7 @@
 
 # Load Modules
 Import-Module -Name Az.Accounts
-Import-Moduel -Name Az.Network
+Import-Module -Name Az.Network
 
 # Set Preferences
 
