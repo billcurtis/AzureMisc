@@ -1,0 +1,7 @@
+Event 
+| where EventID == 6013 and EventLog has "System"
+| extend NewField=parse_xml(EventData)
+| extend Uptime = NewField.DataItem.EventData.Data[4]
+| sort by TimeGenerated desc  
+| summarize arg_max(TimeGenerated, *) by Computer
+| project Computer, Uptime, TimeGenerated
