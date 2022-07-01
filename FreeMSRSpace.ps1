@@ -53,7 +53,7 @@ $msrPathTest = Test-Path -Path $msrPath
 if ($msrPathTest) {
 
 
-    Get-ChildItem  -Path $msrPath -Filter *.tff | Remove-Item -Verbose
+    Get-ChildItem  -Path $msrPath -Filter *.ttf | Remove-Item -Verbose
 
 
 }
