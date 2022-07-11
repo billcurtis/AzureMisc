@@ -12,7 +12,7 @@
 
     .NOTES
     
-        - Script needs to be ran with Admin privileges
+        - Script needs to be run with Admin privileges
 #>
 
 
