@@ -29,8 +29,6 @@ $report = @()
 
 # import required modules
 
-$modCheck = Get-Module | Where-Object { $_.Name -eq "DnsServer" }
-if (!$modCheck) { Write-Error "Module DnsServer was not found! Please install module before running script!" }
 Import-Module -Name DnsServer
 $VerbosePreference = "Continue"
 
