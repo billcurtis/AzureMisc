@@ -3,26 +3,42 @@
 # Log into your subscription or have your Azure administrator register the 
 # resource provider for you.
 
-# Run the following on all HCI nodes in the cluster
-
-Install-PackageProvider -Name NuGet -Force 
-Install-Module -Name PowershellGet -Force -Confirm:$false -SkipPublisherCheck
-
-# Reload PowerShell and then run the following  on ALL HCI nodes in the cluster:
-
-# Install AksHci module
-Install-Module -Name AksHci -Repository PSGallery -Force -AcceptLicense 
-Initialize-AksHciNode
- 
-# Install Azure Powershell
-Install-Module az
-
 # Install Azure CLI
 
 Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile .\AzureCLI.msi
 Start-Process msiexec.exe -Wait -ArgumentList '/I AzureCLI.msi /quiet'
 Remove-Item .\AzureCLI.msi -Force
 $env:Path += 'C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin'
+
+# Run the following on all HCI nodes in the cluster
+
+Install-PackageProvider -Name NuGet -Force
+Install-Module -Name PowershellGet -Force -Confirm:$false -SkipPublisherCheck
+Install-Module -Name AksHci -Repository PSGallery -AcceptLicense -Force
+Install-Module -Name ArcHci -Repository PSGallery -AcceptLicense -Force
+
+curl.exe -LO "https://dl.k8s.io/release/v1.26.0/bin/windows/amd64/kubectl.exe"
+$config = Get-MocConfig
+Copy-Item .\kubectl.exe $config.installationPackageDir
+
+az extension add --name k8s-extension --upgrade
+az extension add --name customlocation --upgrade
+az extension add --name arcappliance --upgrade
+az extension add --name hybridaks --upgrade
+az extension add --name connectedk8s
+
+# Reload PowerShell and then run the following  on ALL HCI nodes in the cluster:
+$env:Path += ';C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin'
+$env:Path += ";$env:userprofile"
+
+# Install AksHci module
+Initialize-AksHciNode
+ 
+# Install Azure Powershell
+Install-Module az
+Install-Module Az.ConnectedKubernetes
+
+
 
 # Now that we've done this, let's go ahead and work off of only one Azure Stack HCI node
 #  for the remainder of this tutorial
@@ -37,8 +53,8 @@ $vlanID = 10                          # This will be your VLAN ID of you HCI man
                                       #  Note that this VLAN will need to be a cluster network on
                                       #  your failover cluster.
 
-$k8sNodeIpPoolStart = "192.168.10.100"
-$k8sNodeIpPoolEnd = "192.168.10.100"
+$k8sNodeIpPoolStart = "192.168.10.210"
+$k8sNodeIpPoolEnd = "192.168.10.219"
 $ipAddressPrefix  = "192.168.10.0/24"
 $gateway = "192.168.10.1"
 $dnsServers = ("1.1.1.1","8.8.8.8")
@@ -99,8 +115,18 @@ $resourcegroupName = 'azstack-rg'
 $arcSpnCredential = new-object -typename System.Management.Automation.PSCredential `
         -argumentlist (($clientID),(ConvertTo-SecureString $clientSecret -AsPlainText -Force))
 
-# Specify Az.Accounts version.This is to get around bug https://github.com/Azure/aks-hybrid/issues/282
+# Specify Az.Accounts version.This is to get around bug https://github.com/Azurdire/aks-hybrid/issues/282un
+# You may need to remove the other account versions - 
+# Get-Module -Name "Az.Accounts" -ListAvailable | select -First 2 | Uninstall-Module -Force 
+
 Import-Module -Name "Az.Accounts" -RequiredVersion 2.6.0  
+
+Connect-AzAccount `
+-ServicePrincipal `
+-Credential $arcSpnCredential `
+-Tenant $tenantID `
+-Subscription $subscriptionID
+
 
 # Sets the AKS Registration. Make sure that the "Validate KVA" is successful before continuing. 
 Set-AksHciRegistration `
@@ -113,4 +139,4 @@ Set-AksHciRegistration `
 
 Install-AksHci
 
-# Wait for AKS to install
+# Fin
