@@ -79,37 +79,16 @@ Enable-AksHciArcConnection `
 -resourceGroup $resourcegroupName `
 -location $region
 
-
-# Log into Azure with sp
-
-az login --service-principal --username $clientID --password $clientSecret --tenant $tenantID
-az account set --subscription $subscriptionID
-
-az provider register --namespace Microsoft.ExtendedLocation
-
-
-# use the following command check registration status before moving on.
-<#
-  "id": "/subscriptions/3b324982-741d-41c8-bc71-8fed923fdb0e/providers/Microsoft.ExtendedLocation",
-  "namespace": "Microsoft.ExtendedLocation",
-  "providerAuthorizationConsentState": null,
-  "registrationPolicy": "RegistrationRequired",
-  "registrationState": "Registered",
-#>
-
-
-
-
-<# Run the following command with an Azure AD Logged in Azure CLI and copy the GUID
+##########################################################################################
+<# Run the following command with an Azure AD User Logged in Azure CLI and copy the GUID
    more information is listed here: 
    https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/azure-arc/kubernetes/custom-locations.md#enable-custom-locations-on-your-cluster
 #>
 
 az ad sp show --id bc313c14-388c-4e7d-a58e-70017303ee3b --query id -o tsv
-
-# after getting the OID GUID.  Go back to your SPN login.
-
+# Insert the resulting GUID into this variable:
 $oid  = "af89a3ae-8ffe-4ce7-89fb-a615f4083dc3" #(note that this is just an example)
+#######################################################################################
 
 az connectedk8s enable-features -n $clusterName -g $resourcegroupName --custom-locations-oid $oid --features cluster-connect custom-locations
 
@@ -118,10 +97,10 @@ az connectedk8s enable-features -n $clusterName -g $resourcegroupName --custom-l
 # You should see: "Successsfully enabled features: ['cluster-connect', 'custom-locations'] for the Connected Cluster
 
 # Next, we will create the Connected Cluster Extension
-
 $adsExtensionName = 'ads-extension'
+Get-AksHciCredential -Name $clusterName  # adding again to ensure that you have done this.
 az k8s-extension create -c $clusterName -g $resourceGroupName --name $adsExtensionName --cluster-type connectedClusters --extension-type microsoft.arcdataservices --auto-upgrade false --scope cluster --release-namespace arc --config Microsoft.CustomLocation.ServiceAccount=sa-bootstrapper
-az provider register --namespace Microsoft.AzureArcData
+
 
 # Next, we will now create the Custom Location
 
@@ -138,7 +117,7 @@ az k8s-extension create --name azuremonitor-containers --cluster-name $clusterNa
 # Now you can go manually and create the Azure Arc Data Contoller
 
 # After the data controller has been created. You may need to reset the controldb-0 pod 
-# with the following commands.
+# with the following commands in order to get around a bug.
 kubectl config set-context --current --namespace=arc
 kubectl delete pod controldb-0
 

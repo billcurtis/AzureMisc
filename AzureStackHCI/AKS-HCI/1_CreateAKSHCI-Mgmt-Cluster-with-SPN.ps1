@@ -1,7 +1,11 @@
 # Note:  This is purely a sample of creating a AKSHCI Management cluster using a Service Principal
 
 # Log into your subscription or have your Azure administrator register the 
-# resource provider for you.
+# following resource providers for you. This should only need to be done
+# once per subscription:
+
+az provider register --namespace Microsoft.ExtendedLocation
+az provider register --namespace Microsoft.AzureArcData
 
 # Install Azure CLI
 
@@ -26,6 +30,7 @@ az extension add --name customlocation --upgrade
 az extension add --name arcappliance --upgrade
 az extension add --name hybridaks --upgrade
 az extension add --name connectedk8s
+
 
 # Reload PowerShell and then run the following  on ALL HCI nodes in the cluster:
 $env:Path += ';C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin'
