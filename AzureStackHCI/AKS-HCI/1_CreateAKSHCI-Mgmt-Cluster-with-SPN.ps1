@@ -1,11 +1,6 @@
 # Note:  This is purely a sample of creating a AKSHCI Management cluster using a Service Principal
 
-# Log into your subscription or have your Azure administrator register the 
-# following resource providers for you. This should only need to be done
-# once per subscription:
 
-az provider register --namespace Microsoft.ExtendedLocation
-az provider register --namespace Microsoft.AzureArcData
 
 # Install Azure CLI
 
@@ -20,10 +15,16 @@ Install-PackageProvider -Name NuGet -Force
 Install-Module -Name PowershellGet -Force -Confirm:$false -SkipPublisherCheck
 Install-Module -Name AksHci -Repository PSGallery -AcceptLicense -Force
 Install-Module -Name ArcHci -Repository PSGallery -AcceptLicense -Force
+Install-Module -Moc
 
 curl.exe -LO "https://dl.k8s.io/release/v1.26.0/bin/windows/amd64/kubectl.exe"
 $config = Get-MocConfig
 Copy-Item .\kubectl.exe $config.installationPackageDir
+
+# Login with account to az cli
+
+az provider register --namespace Microsoft.ExtendedLocation # Only needs to be run once on one node
+az provider register --namespace Microsoft.AzureArcData # Only needs to be run once on one node
 
 az extension add --name k8s-extension --upgrade
 az extension add --name customlocation --upgrade
@@ -37,6 +38,7 @@ $env:Path += ';C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin'
 $env:Path += ";$env:userprofile"
 
 # Install AksHci module
+Install-Module akshci
 Initialize-AksHciNode
  
 # Install Azure Powershell
