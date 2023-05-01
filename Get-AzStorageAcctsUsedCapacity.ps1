@@ -25,3 +25,5 @@ foreach ($storageAcct in $storageAccts) {
 }
 
 $report | Out-GridView -Title "Storage Report"
+
+# You could export to CSV here if you want to. 
