@@ -1,5 +1,8 @@
 # Note:  This is purely a sample of creating a AKSHCI Management cluster using a Service Principal
 
+[Net.ServicePointManager]::SecurityProtocol =
+    [Net.ServicePointManager]::SecurityProtocol -bor
+    [Net.SecurityProtocolType]::Tls12
 
 
 # Install Azure CLI
@@ -13,18 +16,27 @@ $env:Path += 'C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin'
 
 Install-PackageProvider -Name NuGet -Force
 Install-Module -Name PowershellGet -Force -Confirm:$false -SkipPublisherCheck
+
+# you may need to restart the powershell session in order to proceed.
+
 Install-Module -Name AksHci -Repository PSGallery -AcceptLicense -Force
 Install-Module -Name ArcHci -Repository PSGallery -AcceptLicense -Force
-Install-Module -Moc
+Install-Module -Name Moc
 
-curl.exe -LO "https://dl.k8s.io/release/v1.26.0/bin/windows/amd64/kubectl.exe"
-$config = Get-MocConfig
-Copy-Item .\kubectl.exe $config.installationPackageDir
 
 # Login with account to az cli
+az Login
+az account set --subscription # fill in the rest
 
 az provider register --namespace Microsoft.ExtendedLocation # Only needs to be run once on one node
 az provider register --namespace Microsoft.AzureArcData # Only needs to be run once on one node
+az provider register --namespace Microsoft.Kubernetes # Only needs to be run once on one node
+az provider register --namespace Microsoft.Configuration # Only needs to be run once on one node
+az provider register --namespace Microsoft.KubernetesConfiguration # Only needs to be run once on one node
+az provider register --namespace Microsoft.ExtendedLocation # Only needs to be run once on one node
+az provider register --namespace Microsoft.ResourceConnector # Only needs to be run once on one node
+az provider register --namespace Microsoft.AzureStackHCI # Only needs to be run once on one node
+az provider register --namespace Microsoft.HybridConnectivity # Only needs to be run once on one node
 
 az extension add --name k8s-extension --upgrade
 az extension add --name customlocation --upgrade
@@ -64,7 +76,7 @@ $k8sNodeIpPoolStart = "192.168.10.210"
 $k8sNodeIpPoolEnd = "192.168.10.219"
 $ipAddressPrefix  = "192.168.10.0/24"
 $gateway = "192.168.10.1"
-$dnsServers = ("1.1.1.1","8.8.8.8")
+$dnsServers = ("192.168.10.253","192.168.10.254")
 
 
 # If you are using DHCP:
@@ -145,5 +157,12 @@ Set-AksHciRegistration `
 # Install AKS
 
 Install-AksHci
+
+
+
+curl.exe -LO "https://dl.k8s.io/release/v1.26.0/bin/windows/amd64/kubectl.exe"
+$config = Get-MocConfig
+Copy-Item .\kubectl.exe $config.installationPackageDir
+
 
 # Fin
