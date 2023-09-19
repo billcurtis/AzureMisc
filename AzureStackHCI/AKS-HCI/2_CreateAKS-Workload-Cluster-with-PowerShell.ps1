@@ -50,7 +50,6 @@ New-AksHciCluster `
 -osType $osType `
 -controlPlaneNodeCount $controlPlaneNodeCount
 
-
 # Set the kubeconfigprofile
 
 Get-AksHciCredential -Name $clusterName 
@@ -96,28 +95,15 @@ az connectedk8s enable-features -n $clusterName -g $resourcegroupName --custom-l
 #  but the output will show that it was successful.
 # You should see: "Successsfully enabled features: ['cluster-connect', 'custom-locations'] for the Connected Cluster
 
-# Next, we will create the Connected Cluster Extension
-$adsExtensionName = 'ads-extension'
-Get-AksHciCredential -Name $clusterName  # adding again to ensure that you have done this.
-az k8s-extension create -c $clusterName -g $resourceGroupName --name $adsExtensionName --cluster-type connectedClusters --extension-type microsoft.arcdataservices --auto-upgrade false --scope cluster --release-namespace arc --config Microsoft.CustomLocation.ServiceAccount=sa-bootstrapper
-
-
-# Next, we will now create the Custom Location
-
-$ENV:clName="charlotte"
-$ENV:clNamespace="arc"
-$ENV:hostClusterId = az connectedk8s show -g $resourcegroupName -n $clusterName --query id -o tsv
-$ENV:extensionId = az k8s-extension show -g $resourcegroupName -c $clusterName --cluster-type connectedClusters --name $adsExtensionName --query id -o tsv
-
-az customlocation create -g $resourcegroupName -n $ENV:clName --namespace "$ENV:clNamespace" --host-resource-id "$ENV:hostClusterId" --cluster-extension-ids "$ENV:extensionId"
 
 # Configure container monitoring
 az k8s-extension create --name azuremonitor-containers --cluster-name $clusterName --resource-group $resourcegroupName --cluster-type connectedClusters --extension-type Microsoft.AzureMonitor.Containers  
 
-# Now you can go manually and create the Azure Arc Data Contoller
+# Optionally, now you can go manually create the Azure Arc Data Contoller and custom locations
 
 # After the data controller has been created. You may need to reset the controldb-0 pod 
 # with the following commands in order to get around a bug.
 kubectl config set-context --current --namespace=arc
 kubectl delete pod controldb-0
+
 

@@ -42,7 +42,7 @@ az extension add --name k8s-extension --upgrade
 az extension add --name customlocation --upgrade
 az extension add --name arcappliance --upgrade
 az extension add --name hybridaks --upgrade
-az extension add --name connectedk8s
+az extension add --name connectedk8s --upgrade
 
 
 # Reload PowerShell and then run the following  on ALL HCI nodes in the cluster:
@@ -117,7 +117,7 @@ Set-AksHciConfig `
 -imageDir $imageDir `
 -workingDir $workingDir `
 -cloudConfigLocation $cloudConfigLocation `
--vnet $vnet `
+-vnet $vnet 
 -cloudservicecidr $cloudservicecidr
 
 # Now we need to set the registration. Since we are lowley users that do not have admin privs,

@@ -1,0 +1,13 @@
+{
+    "mode": "All",
+    "policyRule": {
+      "if": {
+        "field": "Microsoft.Compute/virtualMachines/storageProfile.osDisk.createOption",
+        "in": ["FromImage"]
+      },
+      "then": {
+        "effect": "Deny"
+      }
+    }
+  }
+  
