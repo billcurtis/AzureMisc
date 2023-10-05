@@ -1,20 +1,19 @@
 <#
     .DESCRIPTION
-       This script will query a DNS server for all DNS A records that are not static and then query Active Directory for the owner of the record. 
-        It will then check to see if a reverse lookup zone exists for the record and if so, will query the reverse lookup zone for the PTR record 
-        and then query Active Directory for the owner of the PTR record. It will then output the results to a gridview and optionally to a csv file.
+       This example script will go through a selected DNS zone and find all Dynamic DNS A records that have a SID as the owner. 
+        It will then prompt the user to select which records to delete and which records to change the owner to the corresponding AD computer account.
 
     .PARAMETER dnsServerName
         The DNS server that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
     .PARAMETER zoneName
-        Mandatory. The DNS zone that you want to query for DNS records.
+        Not Mandatory. The DNS zone that you want to query for DNS records. If not specified, the script will query the domain root.
     .PARAMETER NetbiosDomainName
         The Netbios domain name of the domain that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
     .PARAMETER csvpath
         The path to the csv file that you want to export the results to. Not mandatory.
 
     .EXAMPLE
-        Query-DynamicDNSRecordInfo.ps1 -zoneName "contoso.com" -dnsServerName "dns.contoso.com" -NetbiosDomainName "contoso" -csvpath "c:\temp\DNSReport.csv"
+        Get-DynamicDNSRecordInfo.ps1 -zoneName "contoso.com" -dnsServerName "dns.contoso.com" -NetbiosDomainName "contoso" -csvpath "c:\temp\DNSReport.csv"
 
     .NOTES    
         Requires the ActiveDirectory, DNSServer, and DNSClient PS modules.
@@ -23,8 +22,8 @@
 
 param (
 
-    [Parameter(Mandatory = $true)]
-    [string]$zoneName,
+    [Parameter(Mandatory = $false)]
+    [string]$zoneName = (Get-ADDomain).DnsRoot,
 
     [Parameter(Mandatory = $false)]
     [string]$dnsServerName = (Get-ADDomain).ReplicaDirectoryServers[0],
@@ -197,6 +196,7 @@ foreach ($dnsRecord in $dnsRecordsA) {
             ARecordOwner                                = $aclDns.Owner
             'AD Account Exists for A Record'            = $ADAccountExists
             'AD Account Not Match A Record'             = $RecordOwnerMismatch
+            'Remediate Account Match'                   = $false
             'Reverse Lookup Exists for A Record'        = $ptrExistForHostRecord 
             'AD Account SID'                            = $aclSID            
             PTROwner                                    = $ptrDns.Owner
@@ -211,13 +211,13 @@ foreach ($dnsRecord in $dnsRecordsA) {
 
 }
 
+$VerbosePreference = "silentlycontinue"
+
 # output to gridview for quick results
 $dnsReport | Out-GridView
 
 
 # output to csv if csvpath is specified
 if ($csvpath) {
-    $dnsReport | Export-Csv -Path $csvpath -NoTypeInformation -Force -NoClobber
+    $dnsReport | Export-Csv -Path $csvpath -NoTypeInformation -Force -NoClobber 
 }
-
-$VerbosePreference = "silentlycontinue"

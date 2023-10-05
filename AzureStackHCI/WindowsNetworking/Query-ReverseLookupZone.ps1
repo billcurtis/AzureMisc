@@ -1,25 +1,23 @@
 <#
     .DESCRIPTION
-        This script will query a Reverse Lookup Zone for all PTR records that are dynamic and then attempt resolve these records to an A record.       
+        This script will query a Reverse Lookup Zone for all PTR records that are dynamic and then attempt resolve these records to an A record.  
+             
     .PARAMETER dnsServerName
         The DNS server that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
-    .PARAMETER zoneName
-        Mandatory. The DNS zone that you want to query for DNS records.
+
     .PARAMETER csvpath
         The path to the csv file that you want to export the results to. Not mandatory.
 
     .EXAMPLE
         .\Query-ReverseLookupZone.ps1 -ReverseLookupZoneName "10.168.192.in-addr.arpa" -dnsServerName "dns.contoso.com" -csvpath "c:\temp\DNSReport.csv"
-        
+
+
     .NOTES    
         Requires the ActiveDirectory, DNSServer, and DNSClient PS modules.
 
 #>
 
 param (
-
-    [Parameter(Mandatory = $true)]
-    [string]$ReverseLookupZoneName,
 
     [Parameter(Mandatory = $false)]
     [string]$dnsServerName = (Get-ADDomain).ReplicaDirectoryServers[0],
@@ -49,6 +47,12 @@ catch {
 $ErrorActionPreference = "stop"
 $VerbosePreference = "continue"
 
+# get dns zones
+
+$getReverseZones = Get-DnsServerZone -ComputerName $dnsServerName | Where-Object { $_.IsAutoCreated -eq $false -and $_.IsReverseLookupZone -eq $true } 
+$ReverseLookupZoneName = ($getReverseZones | Out-GridView -Title "Select Reverse Lookup Zone" -PassThru).ZoneName
+
+if ($ReverseLookupZoneName) {
 
 # get all records in specified DNS Zone that are dynamic
 
@@ -97,5 +101,5 @@ if ($csvpath) {
     $dnsReport | Export-Csv -Path $csvpath -NoTypeInformation -Force -NoClobber
 }
 
-
+}
 $VerbosePreference = "silentlycontinue"
