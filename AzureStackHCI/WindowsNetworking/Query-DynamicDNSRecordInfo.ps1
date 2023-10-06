@@ -42,12 +42,16 @@ $dnsReport = @()
 # import modules
 
 $ErrorActionPreference = "stop"
+$VerbosePreference = "silentlycontinue"
 try {
     Import-Module activedirectory
     Import-Module dnsserver
     Import-Module dnsclient
+    $VerbosePreference = "continue"
 }
 catch {
+
+    $VerbosePreference = "silentlycontinue"
     Write-Error -Message "One or more required modules is missing. You must have the ActiveDirectory and DNSServer modules installed to use this script."
 }
 

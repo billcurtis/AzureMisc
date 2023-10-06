@@ -1,7 +1,7 @@
 <#
     .DESCRIPTION
         This script will query a Reverse Lookup Zone for all PTR records that are dynamic and then attempt resolve these records to an A record.  
-             
+
     .PARAMETER dnsServerName
         The DNS server that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
 
@@ -34,9 +34,11 @@ $dnsReport = @()
 
 $ErrorActionPreference = "stop"
 try {
+    $VerbosePreference = "silentlycontinue"
     Import-Module activedirectory
     Import-Module dnsserver
     Import-Module dnsclient
+
 }
 catch {
     Write-Error -Message "One or more required modules is missing. You must have the ActiveDirectory and DNSServer modules installed to use this script."
