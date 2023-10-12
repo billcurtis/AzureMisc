@@ -6,7 +6,7 @@
     .PARAMETER dnsServerName
         The DNS server that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
     .PARAMETER zoneName
-        Not Mandatory. The DNS zone that you want to query for DNS records. If not specified, the script will query the domain root.
+        Mandatory. The DNS zone that you want to query for DNS records.
     .PARAMETER NetbiosDomainName
         The Netbios domain name of the domain that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
     .PARAMETER csvpath
@@ -42,16 +42,12 @@ $dnsReport = @()
 # import modules
 
 $ErrorActionPreference = "stop"
-$VerbosePreference = "silentlycontinue"
 try {
     Import-Module activedirectory
     Import-Module dnsserver
     Import-Module dnsclient
-    $VerbosePreference = "continue"
 }
 catch {
-
-    $VerbosePreference = "silentlycontinue"
     Write-Error -Message "One or more required modules is missing. You must have the ActiveDirectory and DNSServer modules installed to use this script."
 }
 
@@ -83,6 +79,23 @@ foreach ($dnsRecord in $dnsRecordsA) {
     $ptrRecordExist = $null
     $ptrDns = $null
     $aclDns = $null
+    $computerAccountExists = $null
+
+    # check to see if computer account exists in ad
+    $computerAccount = $dnsrecord.Hostname.Replace($domainRoot, '')
+    Write-Verbose -Message "Looking for Computer Account: $computerAccount"
+
+    try {
+
+        $getComputer = Get-AdComputer -Identity $computerAccount  
+        if ($getComputer) { $computerAccountExists = $true }
+
+    }
+    catch {
+
+        $computerAccountExists = $false
+
+    }
 
     # get the reverse lookup zone
 
@@ -121,18 +134,23 @@ foreach ($dnsRecord in $dnsRecordsA) {
 
                     }
 
-                    $ptrDistinguishedName = (Get-DnsServerResourceRecord @params | Where-Object { $_.RecordData.PtrDomainName -match $ptrLookupName })[0].DistinguishedName
+                    $ptrDistinguishedName = Get-DnsServerResourceRecord @params        
+
                     if ($ptrDistinguishedName) {
-   
+
+                        $ptrDistinguishedName = $ptrDistinguishedName[0].DistinguishedName                        
                         $ptrDns = Get-Acl -Path “ActiveDirectory:://RootDSE/$($ptrDistinguishedName)” -ErrorAction SilentlyContinue
+                                                
+                        if ($ptrDns) {
+                        
+                            if (($ptrDns.Owner).EndsWith('$')) { $ptrSID = ((Get-AdComputer -Identity $ptrDns.Owner.Split("\")[1]).Sid).AccountDomainSid.Value }                        
+                            elseif ($ptrDns.Owner -match "S-1-5-21") { $ptrSID = $ptrDns.Owner }                        
+                            elseif ($ptrDns.Owner -match "\\" -and $ptrDns.Owner -notmatch '\$$') {                   
+                    
+                                $ptrSID = Get-ADUser -Identity $ptrDns.Owner.Split("\")[1].AccountDomainSid.Value
 
-                        if (($ptrDns.Owner).EndsWith('$')) { $ptrSID = ((Get-AdComputer -Identity $ptrDns.Owner.Split("\")[1]).Sid).AccountDomainSid.Value }      
-                        elseif ($ptrDns.Owner -match "S-1-5-21") { $ptrSID = $ptrDns.Owner }
-                        elseif ($ptrDns.Owner -match "\\" -and $ptrDns.Owner -notmatch '\$$') { 
-   
-                            $ptrSID = Get-ADUser -Identity  $ptrDns.Owner.Split("\")[1].AccountDomainSid.Value
-
-                        }      
+                            }  
+                        }
       
                     }   
 
@@ -199,12 +217,16 @@ foreach ($dnsRecord in $dnsRecordsA) {
             Hostname                                    = $dnsRecord.HostName            
             ARecordOwner                                = $aclDns.Owner
             'AD Account Exists for A Record'            = $ADAccountExists
-            'AD Account Not Match A Record'             = $RecordOwnerMismatch
+            'Computer Account Not Match A Record'       = $RecordOwnerMismatch
+            'Matching Computer Account Exists'          = $computerAccountExists
             'Remediate Account Match'                   = $false
             'Reverse Lookup Exists for A Record'        = $ptrExistForHostRecord 
             'AD Account SID'                            = $aclSID            
             PTROwner                                    = $ptrDns.Owner
-            'A Record Owner DistinguishedName'          = $dnsRecord.DistinguishedName
+            DNSServername                               = $dnsServerName
+            DNSZone                                     = $zoneName
+            NetBiosDomainName                           = $NetbiosDomainName
+            'A Record DistinguishedName'                = $dnsRecord.DistinguishedName
             'Reverse Lookup Account Distinguished Name' = $ptrDistinguishedName             
 
         }
@@ -215,7 +237,6 @@ foreach ($dnsRecord in $dnsRecordsA) {
 
 }
 
-$VerbosePreference = "silentlycontinue"
 
 # output to gridview for quick results
 $dnsReport | Out-GridView
@@ -223,5 +244,9 @@ $dnsReport | Out-GridView
 
 # output to csv if csvpath is specified
 if ($csvpath) {
+    
+    Write-Verbose -Message "Writing CSV file to: $csvpath"
     $dnsReport | Export-Csv -Path $csvpath -NoTypeInformation -Force -NoClobber 
 }
+
+$VerbosePreference = "silentlycontinue"
