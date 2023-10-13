@@ -134,23 +134,28 @@ foreach ($dnsRecord in $dnsRecordsA) {
 
                     }
 
-                    $ptrDistinguishedName = Get-DnsServerResourceRecord @params        
-
+                    $ptrDistinguishedName = Get-DnsServerResourceRecord @params
                     if ($ptrDistinguishedName) {
-
-                        $ptrDistinguishedName = $ptrDistinguishedName[0].DistinguishedName                        
-                        $ptrDns = Get-Acl -Path “ActiveDirectory:://RootDSE/$($ptrDistinguishedName)” -ErrorAction SilentlyContinue
-                                                
-                        if ($ptrDns) {
                         
-                            if (($ptrDns.Owner).EndsWith('$')) { $ptrSID = ((Get-AdComputer -Identity $ptrDns.Owner.Split("\")[1]).Sid).AccountDomainSid.Value }                        
-                            elseif ($ptrDns.Owner -match "S-1-5-21") { $ptrSID = $ptrDns.Owner }                        
-                            elseif ($ptrDns.Owner -match "\\" -and $ptrDns.Owner -notmatch '\$$') {                   
-                    
-                                $ptrSID = Get-ADUser -Identity $ptrDns.Owner.Split("\")[1].AccountDomainSid.Value
+                        $ptrDistinguishedName = ($ptrDistinguishedName | Where-Object { $_.RecordData.PtrDomainName -match $ptrLookupName })
 
+                        if ($ptrDistinguishedName) {
+
+                            $ptrDistinguishedName = $ptrDistinguishedName[0].DistinguishedName
+                            $ptrDns = Get-Acl -Path “ActiveDirectory:://RootDSE/$($ptrDistinguishedName)” -ErrorAction SilentlyContinue
+
+                            if ($ptrDns) {
+                                if (($ptrDns.Owner).EndsWith('$')) { $ptrSID = ((Get-AdComputer -Identity $ptrDns.Owner.Split("\")[1]).Sid).AccountDomainSid.Value }      
+                                elseif ($ptrDns.Owner -match "S-1-5-21") { $ptrSID = $ptrDns.Owner }
+                                elseif ($ptrDns.Owner -match "\\" -and $ptrDns.Owner -notmatch '\$$') { 
+   
+                                    $ptrSID = Get-ADUser -Identity  $ptrDns.Owner.Split("\")[1].AccountDomainSid.Value
+
+                                }
+                        
                             }  
-                        }
+                                            
+                        }  
       
                     }   
 
@@ -167,6 +172,7 @@ foreach ($dnsRecord in $dnsRecordsA) {
         }
 
     }
+
 
     # evaluate the owner of the dns record
 
