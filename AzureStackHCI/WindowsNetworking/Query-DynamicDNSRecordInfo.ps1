@@ -142,7 +142,7 @@ foreach ($dnsRecord in $dnsRecordsA) {
                         if ($ptrDistinguishedName) {
 
                             $ptrDistinguishedName = $ptrDistinguishedName[0].DistinguishedName
-                            $ptrDns = Get-Acl -Path “ActiveDirectory:://RootDSE/$($ptrDistinguishedName)” -ErrorAction SilentlyContinue
+                            $ptrDns = Get-Acl -Path "ActiveDirectory:://RootDSE/$($ptrDistinguishedName)" -ErrorAction SilentlyContinue
 
                             if ($ptrDns) {
                                 if (($ptrDns.Owner).EndsWith('$')) { $ptrSID = ((Get-AdComputer -Identity $ptrDns.Owner.Split("\")[1]).Sid).AccountDomainSid.Value }      
@@ -176,7 +176,7 @@ foreach ($dnsRecord in $dnsRecordsA) {
 
     # evaluate the owner of the dns record
 
-    $aclDns = Get-Acl -Path “ActiveDirectory:://RootDSE/$($dnsRecord.DistinguishedName)” -ErrorAction SilentlyContinue
+    $aclDns = Get-Acl -Path "ActiveDirectory:://RootDSE/$($dnsRecord.DistinguishedName)" -ErrorAction SilentlyContinue
     if ($aclDns) {
 
         try {
