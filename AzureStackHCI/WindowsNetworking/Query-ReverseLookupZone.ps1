@@ -1,12 +1,17 @@
 <#
     .DESCRIPTION
-        This script will query a Reverse Lookup Zone for all PTR records that are dynamic and then attempt resolve these records to an A record.  
+        This script will query a Reverse Lookup Zone for all PTR records that are dynamic and then attempt resolve these records to an A record.
+         After resolving these records to an A record, the script will attempt to match the A record to an AD computer account. 
+         The script will output results to a CSV file.  
 
     .PARAMETER dnsServerName
         The DNS server that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
 
     .PARAMETER csvpath
         The path to the csv file that you want to export the results to. Not mandatory.
+
+    .PARAMETER NetbiosDomainName
+        The Netbios domain name of the domain that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
 
     .EXAMPLE
         .\Query-ReverseLookupZone.ps1 -ReverseLookupZoneName "10.168.192.in-addr.arpa" -dnsServerName "dns.contoso.com" -csvpath "c:\temp\DNSReport.csv"
