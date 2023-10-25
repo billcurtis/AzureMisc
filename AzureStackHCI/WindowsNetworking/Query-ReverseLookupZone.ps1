@@ -11,7 +11,6 @@
     .EXAMPLE
         .\Query-ReverseLookupZone.ps1 -ReverseLookupZoneName "10.168.192.in-addr.arpa" -dnsServerName "dns.contoso.com" -csvpath "c:\temp\DNSReport.csv"
 
-
     .NOTES    
         Requires the ActiveDirectory, DNSServer, and DNSClient PS modules.
 
@@ -23,7 +22,11 @@ param (
     [string]$dnsServerName = (Get-ADDomain).ReplicaDirectoryServers[0],
 
     [Parameter(Mandatory = $false)]
-    [string]$csvpath = $null
+    [string]$csvpath = $null,
+
+    [Parameter(Mandatory = $false)]
+    [string]$NetbiosDomainName = (Get-ADDomain).NetbiosName
+
 )
 
 
@@ -49,47 +52,79 @@ catch {
 $ErrorActionPreference = "stop"
 $VerbosePreference = "continue"
 
+
+# get domain root
+$domainRoot = (Get-ADDomain | Where-Object { $_.NetbiosName -eq $NetbiosDomainName }).DNSRoot
+
 # get dns zones
 
 $getReverseZones = Get-DnsServerZone -ComputerName $dnsServerName | Where-Object { $_.IsAutoCreated -eq $false -and $_.IsReverseLookupZone -eq $true } 
-$ReverseLookupZoneName = ($getReverseZones | Out-GridView -Title "Select Reverse Lookup Zone" -PassThru).ZoneName
+$ReverseLookupZoneNames = ($getReverseZones | Out-GridView -Title "Select Reverse Lookup Zone" -OutputMode Multiple ).ZoneName 
 
-if ($ReverseLookupZoneName) {
+foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
 
-# get all records in specified DNS Zone that are dynamic
 
-$dnsRecords = Get-DnsServerResourceRecord -ZoneName $ReverseLookupZoneName -RRType PTR -ComputerName $dnsServerName | Where-Object { $_.Timestamp }
+    if ($ReverseLookupZoneName) {
 
-# cycle through each record and get the host name associated with the record. then try to resolve the DNS name to an A record.
+        # get all records in specified DNS Zone that are dynamic
 
-foreach ($dnsRecord in $dnsRecords) {
+        $dnsRecords = Get-DnsServerResourceRecord -ZoneName $ReverseLookupZoneName -RRType PTR -ComputerName $dnsServerName | Where-Object { $_.Timestamp }
 
-    # set variables
-    $resolveDNS = $null
-    $dnsResolved = $false
+        # cycle through each record and get the host name associated with the record. then try to resolve the DNS name to an A record.
 
-    if ($dnsRecord.RecordData) {
+        foreach ($dnsRecord in $dnsRecords) {
 
-        Write-Verbose -Message "INFO: Resolving $($dnsRecord.RecordData.PtrDomainName)"
-        $VerbosePreference = "silentlycontinue"
-        $resolveDNS = Resolve-DnsName -Name $dnsRecord.RecordData.PtrDomainName -ErrorAction SilentlyContinue 
-        $VerbosePreference = "continue"
+            # set variables
+            $resolveDNS = $null
+            $dnsResolved = $false
 
-        if ($resolveDNS.Name -ne $null) {
+            if ($dnsRecord.RecordData) {
 
-            $dnsResolved = $true
+                Write-Verbose -Message "INFO: Resolving $($dnsRecord.RecordData.PtrDomainName)"
+                $VerbosePreference = "silentlycontinue"
+                $resolveDNS = Resolve-DnsName -Name $dnsRecord.RecordData.PtrDomainName -ErrorAction SilentlyContinue 
+                $VerbosePreference = "continue"
 
-        }
+                if ($resolveDNS.Name -ne $null) { $dnsResolved = $true }
+
+                # get owner
+                $ptrDnsOwner = (Get-Acl -Path "ActiveDirectory:://RootDSE/$($dnsRecord.DistinguishedName)" -ErrorAction SilentlyContinue).Owner
+                Write-Verbose -Message "INFO: Resolved Owner to: $ptrDnsOwner"
+                if (!$ptrDnsOwner) { $ptrDnsOwner = 'Owner Not Resolvable' }
+                if ($ptrDnsOwner) {
+
+                    # construct computer account name (if any)
+                    $adComputerName = $dnsrecord.RecordData.PtrDomainName.Replace(".$domainRoot.", '') + "$"
+
+                    try {
+                        $adComputerObject = (Get-ADComputer -Identity $adComputerName -ErrorAction SilentlyContinue).DistinguishedName
+                    }
+                    catch {
+
+                        $adComputerObject = "Not Found"
+
+                    }
  
-        $dnsReport += [pscustomobject]@{
 
-            PtrHostName              = $dnsRecord.RecordData.PtrDomainName
-            DistinguishedName        = $dnsRecord.DistinguishedName
-            'Resolves to A Record'   = $dnsResolved
-            ReverseDNSLookupZoneName = $ReverseLookupZoneName
+                }
+         
+                $dnsReport += [pscustomobject]@{
+            
+            
+                    ReverseDNSLookupZoneName       = $ReverseLookupZoneName
+                    PtrHostName                    = $dnsRecord.RecordData.PtrDomainName
+                    PTRDistinguishedName           = $dnsRecord.DistinguishedName
+                    'Resolves to A Record'         = $dnsResolved
+                    'Matching AD Computer Account' = $adComputerObject
+                    PTRRecordOwner                 = $ptrDnsOwner
+                    'Remediate Account Match'      = $false
+
+                }
+
+
+            }
 
         }
-
 
     }
 
@@ -103,5 +138,4 @@ if ($csvpath) {
     $dnsReport | Export-Csv -Path $csvpath -NoTypeInformation -Force -NoClobber
 }
 
-}
 $VerbosePreference = "silentlycontinue"
