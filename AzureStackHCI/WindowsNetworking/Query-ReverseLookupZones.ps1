@@ -14,7 +14,7 @@
         The Netbios domain name of the domain that you want to query for DNS records. Not mandatory if the script is run from a domain joined computer.
 
     .EXAMPLE
-        .\Query-ReverseLookupZone.ps1 -ReverseLookupZoneName "10.168.192.in-addr.arpa" -dnsServerName "dns.contoso.com" -csvpath "c:\temp\DNSReport.csv"
+        .\Query-ReverseLookupZones.ps1 -csvpath "c:\temp\DNSReport.csv"
 
     .NOTES    
         Requires the ActiveDirectory, DNSServer, and DNSClient PS modules.
@@ -104,7 +104,9 @@ foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
                     $adComputerName = $dnsrecord.RecordData.PtrDomainName.Replace(".$domainRoot.", '') + "$"
 
                     try {
-                        $adComputerObject = (Get-ADComputer -Identity $adComputerName -ErrorAction SilentlyContinue).DistinguishedName
+                        $adComputerObject = Get-ADComputer -Identity $adComputerName -ErrorAction SilentlyContinue
+                        if ($ptrDnsOwner -match "S-1-5-21") { $remediateAcctString = $true }
+
                     }
                     catch {
 
@@ -122,7 +124,7 @@ foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
                     ReverseDNSLookupZoneName       = $ReverseLookupZoneName
                     PtrHostName                    = $dnsRecord.RecordData.PtrDomainName
                     PTRDistinguishedName           = $dnsRecord.DistinguishedName
-                    'Matching AD Computer Account' = $adComputerObject
+                    'Matching AD Computer Account' = $adComputerObject.DistinguishedName
                     PTRRecordOwner                 = $ptrDnsOwner
                     'Resolves to A Record'         = $dnsResolved
                     'Remediate Owner'              = $remediateAcctString
