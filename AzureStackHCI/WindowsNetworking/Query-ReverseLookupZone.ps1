@@ -79,9 +79,11 @@ foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
 
         foreach ($dnsRecord in $dnsRecords) {
 
+
             # set variables
             $resolveDNS = $null
             $dnsResolved = $false
+            $remediateAcctString = $false
 
             if ($dnsRecord.RecordData) {
 
@@ -107,6 +109,7 @@ foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
                     catch {
 
                         $adComputerObject = "Not Found"
+                        $remediateAcctString = "Not Possible"
 
                     }
  
@@ -119,10 +122,10 @@ foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
                     ReverseDNSLookupZoneName       = $ReverseLookupZoneName
                     PtrHostName                    = $dnsRecord.RecordData.PtrDomainName
                     PTRDistinguishedName           = $dnsRecord.DistinguishedName
-                    'Resolves to A Record'         = $dnsResolved
                     'Matching AD Computer Account' = $adComputerObject
                     PTRRecordOwner                 = $ptrDnsOwner
-                    'Remediate Account Match'      = $false
+                    'Resolves to A Record'         = $dnsResolved
+                    'Remediate Owner'              = $remediateAcctString
 
                 }
 
