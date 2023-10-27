@@ -22,7 +22,6 @@ param (
     [Parameter(Mandatory = $false)]
     [string]$NetbiosDomainName = (Get-ADDomain).NetbiosName
 
-
 )
 
 # import modules
