@@ -173,7 +173,6 @@ foreach ($dnsRecord in $dnsRecordsA) {
 
     }
 
-
     # evaluate the owner of the dns record
 
     $aclDns = Get-Acl -Path "ActiveDirectory:://RootDSE/$($dnsRecord.DistinguishedName)" -ErrorAction SilentlyContinue

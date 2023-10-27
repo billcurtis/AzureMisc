@@ -79,7 +79,6 @@ foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
 
         foreach ($dnsRecord in $dnsRecords) {
 
-
             # set variables
             $resolveDNS = $null
             $dnsResolved = $false
