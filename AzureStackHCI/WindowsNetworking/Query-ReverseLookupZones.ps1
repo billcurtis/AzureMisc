@@ -79,6 +79,7 @@ foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
 
         foreach ($dnsRecord in $dnsRecords) {
 
+
             # set variables
             $resolveDNS = $null
             $dnsResolved = $false
@@ -94,8 +95,17 @@ foreach ($ReverseLookupZoneName in $ReverseLookupZoneNames) {
                 if ($resolveDNS.Name -ne $null) { $dnsResolved = $true }
 
                 # get owner
-                $ptrDnsOwner = (Get-Acl -Path "ActiveDirectory:://RootDSE/$($dnsRecord.DistinguishedName)" -ErrorAction SilentlyContinue).Owner
-                Write-Verbose -Message "INFO: Resolved Owner to: $ptrDnsOwner"
+                $ptrDnsSddl = (Get-Acl -Path "ActiveDirectory:://RootDSE/$($dnsRecord.DistinguishedName)" -ErrorAction SilentlyContinue).Sddl
+                $ptrDnsOwnerSID = $ptrDnsSddl -replace 'o:(.+?)G:.+', '$1'
+                $prtDnsOwnerSIDTranslate = New-Object System.Security.Principal.SecurityIdentifier($ptrDnsOwnerSID)
+                try {
+                    $ptrDnsOwner = $prtDnsOwnerSIDTranslate.Translate([System.Security.Principal.NTAccount])
+                }
+                catch {
+
+                    $ptrDnsOwner = 'Owner Not Resolvable'
+
+                }
                 if (!$ptrDnsOwner) { $ptrDnsOwner = 'Owner Not Resolvable' }
                 if ($ptrDnsOwner) {
 
