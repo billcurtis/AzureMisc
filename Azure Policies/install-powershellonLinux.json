@@ -57,7 +57,7 @@
                       "protectedSettings": {
                         "commandToExecute": "sh script.sh",
                         "fileUris": [
-                          "https://wcurtisdemo.blob.core.windows.net/dscflats/script.sh?sp=r&st=2024-02-23T16:24:31Z&se=2024-05-23T16:24:31Z&sv=2022-11-02&sr=b&sig=Y9r0Jb42RHnaGRaH5Q6eMJu%2FWZSyDbt2LifXhkdn94I%3D"
+                          "<URI GOES HERE>"
                         ]
                       }
                     }
