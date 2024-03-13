@@ -1,0 +1,95 @@
+{
+    "mode": "All",
+    "policyRule": {
+        "if": {
+            "allOf": [
+                {
+                    "field": "type",
+                    "equals": "Microsoft.Compute/virtualMachines"
+                },
+                {
+                    "field": "Microsoft.Compute/virtualMachines/osProfile.windowsConfiguration",
+                    "exists": "true"
+                }
+            ]
+        },
+        "then": {
+            "effect": "deployIfNotExists",
+            "details": {
+                "type": "Microsoft.Compute/virtualMachines/extensions",
+                "roleDefinitionIds": [
+                    "/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c"
+                ],
+                "existenceCondition": {
+                    "allOf": [
+                        {
+                            "field": "Microsoft.Compute/virtualMachines/extensions/type",
+                            "contains": "CustomScript"
+                        }
+                    ]
+                },
+                "deployment": {
+                    "properties": {
+                        "mode": "incremental",
+                        "template": {
+                            "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                            "contentVersion": "1.0.0.0",
+                            "parameters": {
+                                "vmName": {
+                                    "type": "String"
+                                },
+                                "location": {
+                                    "type": "String"
+                                },
+                                "fileUris": {
+                                    "type": "String"
+                                },
+                                "arguments": {
+                                    "defaultValue": " ",
+                                    "type": "SecureString"
+                                }
+                            },
+                            "variables": {
+                                "UriFileNamePieces": "[split(parameters('fileUris'), '/')]",
+                                "firstFileNameString": "[variables('UriFileNamePieces')[sub(length(variables('UriFileNamePieces')), 1)]]",
+                                "firstFileNameBreakString": "[split(variables('firstFileNameString'), '?')]",
+                                "firstFileName": "[variables('firstFileNameBreakString')[0]]"
+                            },
+                            "resources": [
+                                {
+                                    "name": "[concat(parameters('vmName'),'/InstallNotepadPlusPlus')]",
+                                    "type": "Microsoft.Compute/virtualMachines/extensions",
+                                    "location": "[parameters('location')]",
+                                    "apiVersion": "2015-06-15",
+                                    "properties": {
+                                        "publisher": "Microsoft.Compute",
+                                        "type": "CustomScriptExtension",
+                                        "typeHandlerVersion": "1.9",
+                                        "autoUpgradeMinorVersion": true,
+                                        "settings": {},
+                                        "protectedSettings": {
+                                            "commandToExecute": "[concat ('powershell -ExecutionPolicy Unrestricted -File ', variables('firstFileName'), ' ', parameters('arguments'))]",
+                                            "fileUris": "[split(parameters('fileUris'), ' ')]"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "parameters": {
+                            "vmName": {
+                                "value": "[field('name')]"
+                            },
+                            "location": {
+                                "value": "[field('location')]"
+                            },
+                            "fileUris": {
+                                "value": "https://wcurtisdemo.blob.core.windows.net/dscflats/InstallNotepadPlusPlus.ps1?sp=r&st=2024-03-13T19:01:59Z&se=2024-06-11T19:01:59Z&sv=2022-11-02&sr=b&sig=%2B8sivOHy6Hd2V08qgAbzwdS4lZTosxjHJcrOf%2F3tjOc%3D"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "parameters": {}
+}
