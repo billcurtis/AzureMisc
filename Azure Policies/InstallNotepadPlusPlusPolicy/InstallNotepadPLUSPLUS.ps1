@@ -35,8 +35,8 @@ New-Item -Path $filePath -ItemType Directory -Force -Confirm:$false
 # download notepad++
 $params = @{
 
-Uri = $fileUri
-Outfile = "$filepath\$filename"
+    Uri     = $fileUri
+    Outfile = "$filepath\$filename"
 
 }
 
