@@ -19,7 +19,8 @@ Here are the static variables that are to be hardcoded into the script:
 #>
 
 
-
+# static variables
+$fileUri = "<BLOB FILE URI HERE>"
 $filePath = "D:\Temp\NotepadInstall"
 $filename = "npp.8.6.4.Installer.x64.exe"
 $fileargs = "/S"
