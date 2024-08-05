@@ -12,7 +12,7 @@
     .NOTES 
         - Requires the Az.OperationalInsights PS module
         - You must already be logged into Azure through Connect-AzAccount and have the 
-            appropriate permissionsbefore running this script.
+            appropriate permissions before running this script.
 
 #>
 
@@ -96,10 +96,14 @@ foreach ($subscription in $subcriptions) {
             # Check if any VMs are using MMA agents in this workspace
             $query = 'Heartbeat | where Category contains "Direct Agent" | distinct Computer'
             $queryResults = (Invoke-AzOperationalInsightsQuery -WorkspaceId $workspace.CustomerId -Query $query).Results
-            $MMACount = $queryResults.Comnputer.Count
+            $amaQuery = 'Heartbeat | where Category contains "Azure Monitor Agent" | distinct Computer'
+            $amaQueryResults = (Invoke-AzOperationalInsightsQuery -WorkspaceId $workspace.CustomerId -Query $amaQuery).Results
+            $MMACount = $queryResults.Computer.Count
+            $AMACount = $amaqueryResults.Computer.Count
             $MMAComputers = $queryResults.Computer -join ", "
+            $AMAComputers = $amaqueryResults.Computer -join ", "
             
-            if ($mmacount -gt 0) {
+            if ($mmacount -gt 0 -or $amacount -gt 0) {
                 write-host "Workspace Name: " $workspace.Name
                 $totalMMACount += $MMACount
                 $wsReport += [PSCustomObject]@{
@@ -114,6 +118,8 @@ foreach ($subscription in $subcriptions) {
                     WinPerfConfigured      = $WinPerfConfigured
                     MMACount               = $MMACount
                     MMAComputers           = $MMAComputers
+                    AMACount               = $AMACount
+                    AMAComputers           = $AMAComputers
 
                 }
 
