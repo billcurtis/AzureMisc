@@ -18,7 +18,7 @@
 
 
 # configure static variables
-
+[int]$timespan = 10
 $wsReport = @()
 $totalMMACount = 0
 
@@ -94,9 +94,9 @@ foreach ($subscription in $subcriptions) {
             }
 
             # Check if any VMs are using MMA agents in this workspace
-            $query = 'Heartbeat | where Category contains "Direct Agent" | distinct Computer'
+            $query = "Heartbeat | where TimeGenerated >= ago($($timespan)m)  | where Category contains 'Direct Agent' | distinct Computer"
             $queryResults = (Invoke-AzOperationalInsightsQuery -WorkspaceId $workspace.CustomerId -Query $query).Results
-            $amaQuery = 'Heartbeat | where Category contains "Azure Monitor Agent" | distinct Computer'
+            $amaQuery = "Heartbeat | where TimeGenerated >= ago($($timespan)m)  | where Category contains 'Azure Monitor Agent' | distinct Computer"
             $amaQueryResults = (Invoke-AzOperationalInsightsQuery -WorkspaceId $workspace.CustomerId -Query $amaQuery).Results
             $MMACount = $queryResults.Computer.Count
             $AMACount = $amaqueryResults.Computer.Count
