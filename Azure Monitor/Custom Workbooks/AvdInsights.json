@@ -1,0 +1,532 @@
+{
+    "version": "Notebook/1.0",
+    "items": [
+      {
+        "type": 9,
+        "content": {
+          "version": "KqlParameterItem/1.0",
+          "parameters": [
+            {
+              "id": "2a29194a-de5a-46d6-9d20-28f71a0affa9",
+              "version": "KqlParameterItem/1.0",
+              "name": "Subscriptions",
+              "type": 6,
+              "isRequired": true,
+              "multiSelect": true,
+              "quote": "'",
+              "delimiter": ",",
+              "typeSettings": {
+                "additionalResourceOptions": [
+                  "value::all"
+                ],
+                "includeAll": true
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "defaultValue": "value::all"
+            },
+            {
+              "id": "b6979257-b731-4588-9120-1f03d5a3f1df",
+              "version": "KqlParameterItem/1.0",
+              "name": "Workspaces",
+              "type": 5,
+              "isRequired": true,
+              "multiSelect": true,
+              "quote": "'",
+              "delimiter": ",",
+              "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| distinct id",
+              "crossComponentResources": [
+                "{Subscriptions}"
+              ],
+              "typeSettings": {
+                "additionalResourceOptions": [
+                  "value::1",
+                  "value::all"
+                ]
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "defaultValue": "value::all",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources"
+            },
+            {
+              "id": "e8f59ee3-ca5c-409d-a411-f8b5fd4b5549",
+              "version": "KqlParameterItem/1.0",
+              "name": "Hostpools",
+              "type": 5,
+              "isRequired": true,
+              "multiSelect": true,
+              "quote": "'",
+              "delimiter": ",",
+              "query": "resources\r\n| where type =~ 'microsoft.desktopvirtualization/hostpools'\r\n| distinct id",
+              "crossComponentResources": [
+                "{Subscriptions}"
+              ],
+              "typeSettings": {
+                "additionalResourceOptions": [
+                  "value::1",
+                  "value::all"
+                ]
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "defaultValue": "value::all",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources"
+            }
+          ],
+          "style": "pills",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces"
+        },
+        "name": "parameters - 0"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "items": [
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDConnections\r\n| where TimeGenerated > ago(28d)\r\n| where State == \"Completed\" or State == \"Started\"\r\n| where GatewayRegion != \"<>\"\r\n| join kind=leftouter(WVDErrors | where TimeGenerated > ago(28d)) on CorrelationId \r\n| summarize \r\n            PercentFailurestoSessions= round(toreal(dcountif(CorrelationId, isnotempty(CodeSymbolic))) / toreal(dcount(CorrelationId)) * 100.0, 1)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "title": "Weekly Percentage of Errors from Total Monthly Sessions",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "PercentFailurestoSessions",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "min": 0,
+                      "max": 100,
+                      "palette": "greenRed"
+                    },
+                    "numberFormat": {
+                      "unit": 1,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 2",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDConnections\r\n| where TimeGenerated > ago(28d)\r\n| where State == \"Completed\" or State == \"Started\"\r\n| where GatewayRegion != \"<>\"\r\n| summarize \r\n            UniqueSessions = dcount(CorrelationId) \r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "title": "Weekly Unique Sessions",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "subtitleContent": {
+                    "columnMatch": "UniqueSessions",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 2 - Copy",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDConnections\r\n| where TimeGenerated > ago(28d)\r\n| where State == \"Completed\" or State == \"Started\"\r\n| where GatewayRegion != \"<>\"\r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "title": "Weekly Unique Users",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 2 - Copy - Copy",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ConnectionFailedNoHealthyRdshAvailable\"\r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "title": "Weekly Connections Failed Due to No Session Hosts Available",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 2 - Copy - Copy - Copy",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"AuthenticationLogonFailed\" or CodeSymbolic == \"SSL_ERR_PKINIT_NAME_MISMATCH\"\r\nor CodeSymbolic == \"SSL_ERR_CREDENTIAL_PROMPT_FAILED\" or CodeSymbolic == \"InvalidCredentials\"\r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "title": "Weekly Authentication Issues",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 2 - Copy - Copy - Copy - Copy",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ConnectionFailedUserHasValidSessionButRdshIsUnhealthy\" or CodeSymbolic == \"ConnectionFailedReverseConnectStackIsNotListening\"\r\nor CodeSymbolic == \"ConnectionFailedRDAgentBrokerConnectionNotFound\" or CodeSymbolic == \"GraphicsCapsNotReceived\"\r\nor CodeSymbolic == \"ConnectionFailedPersonalDesktopFailedToBeStarted\"\r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "title": "Weekly Failed Connections Due to Unhealthy Session Hosts",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 2 - Copy - Copy - Copy - Copy - Copy",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ShortpathTransportNetworkDrop\" or CodeSymbolic == \"ClientNetworkUnavailable\" \r\nor CodeSymbolic == \"ConnectionFailedClientDisconnect\" or CodeSymbolic == \"TransportClosedUnexpectedly\"\r\nor CodeSymbolic == \"ConnectionFailedReverseUngracefulClose\" or CodeSymbolic == \"ConnectionFailedServerDisconnect\"\r\nor CodeSymbolic == \"ConnectionFailedClientChannelUngracefulClose\" or CodeSymbolic == \"IndirectDisplayDriverFailure\"\r\nor CodeSymbolic == \"UnexpectedNetworkDisconnect\"\r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "title": "Weekly Connections Dropped Due to Network Error on Client End",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 2 - Copy - Copy - Copy - Copy - Copy - Copy",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ConnectionFailedClientConnectedTooLateReverseConnectionAlreadyClosed\" or CodeSymbolic == \"ActivityTimeout\" \r\nor CodeSymbolic == \"ConnectionFailedOrchestrationFailureTimeout\" or CodeSymbolic == \"ConnectionBrokenMissedHeartbeatThresholdExceeded\"\r\nor CodeSymbolic == \"ConnectionInitiationSequenceTimeout\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "title": "Weekly Connections Dropped Due to Slow Network",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 2 - Copy - Copy - Copy - Copy - Copy - Copy - Copy",
+              "styleSettings": {
+                "showBorder": true
+              }
+            }
+          ]
+        },
+        "customWidth": "50",
+        "name": "group - 4",
+        "styleSettings": {
+          "showBorder": true
+        }
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "items": [
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDConnectionNetworkData \r\n| where TimeGenerated > ago(28d)\r\n| join kind=inner (WVDConnections\r\n        | where TimeGenerated > ago(28d) and State ==\"Connected\" and UserName !=\"\" \r\n)  on CorrelationId\r\n| make-series RRTSeries = avg(EstRoundTripTimeInMs) on TimeGenerated from ago(28d) to now() step 1d by GatewayRegion\r\n| extend Series = series_stats_dynamic(RRTSeries)\r\n| extend avgRTT = round(toreal(Series.avg), 1), maxRTT = round(toreal(Series.max), 1)\r\n| sort by avgRTT desc",
+                "size": 0,
+                "title": "Monthly Avg RTT by Gateway Region with Time Chart & Max RTT",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "GatewayRegion",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "avgRTT",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "greenRed"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal",
+                        "maximumFractionDigits": 2,
+                        "maximumSignificantDigits": 3
+                      }
+                    }
+                  },
+                  "rightContent": {
+                    "columnMatch": "maxRTT",
+                    "formatter": 1
+                  },
+                  "secondaryContent": {
+                    "columnMatch": "RRTSeries",
+                    "formatter": 21,
+                    "formatOptions": {
+                      "palette": "green"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 0"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "let newSessions = true;\r\nWVDConnections\r\n| as ConnectionData\r\n| where State == \"Started\"\r\n| join kind = leftsemi\r\n(\r\n    // Only include connections that actually reached the host to prevent short (failed) attempts from skewing the data\r\n    WVDCheckpoints\r\n    | where Source == \"RDStack\" and Name == \"RdpStackConnectionEstablished\"\r\n) on CorrelationId\r\n| join kind=leftsemi // remove connections that do not have LogonDelay as we cannot show details\r\n(    WVDCheckpoints\r\n    | where Name == \"LogonDelay\"\r\n    | extend LogonType = tostring(Parameters.LogonType)\r\n    | where (newSessions and LogonType == \"DirectSession\") or (not(newSessions) and LogonType ==\"TemporarySession\")\r\n    | project LogonDelay= TimeGenerated, CorrelationId\r\n) on CorrelationId \r\n| join kind = leftsemi\r\n(\r\n    WVDCheckpoints\r\n    | where Name == \"LoadBalancedNewConnection\"\r\n    | extend LoadBalanceOutcome=Parameters.LoadBalanceOutcome\r\n    | where (newSessions and LoadBalanceOutcome == \"NewSession\") or (not(newSessions) and LoadBalanceOutcome in ('Disconnected', 'Active'))\r\n) on CorrelationId\r\n| join kind = inner\r\n(\r\n    WVDCheckpoints // new session\r\n    | where newSessions\r\n    | where Name =~ \"ShellReady\" or\r\n    ( Name =~ \"LaunchExecutable\" and Parameters.connectionStage == \"RdpShellAppExecuted\" or Name=~\"RdpShellAppExecuted\")\r\n    | project ProductiveTime=TimeGenerated, CorrelationId\r\n    | summarize ProductiveTime=min(ProductiveTime) by CorrelationId\r\n    | union ( \r\n        ConnectionData // existent Sessions\r\n        | where not(newSessions)\r\n        | where State == \"Connected\"\r\n        | project ProductiveTime=TimeGenerated, CorrelationId\r\n        )\r\n) on CorrelationId\r\n| join kind = leftouter\r\n(  \r\n    WVDCheckpoints\r\n    | where Name =~ \"OnCredentialsAcquisitionCompleted\"\r\n    | project CorrelationId, credaquire = Parameters.DurationMS\r\n    //OnCredentialsAcquisitionCompleted\t2021-09-13T16:48:50.4440000Z\tClient\t{\"CredentialType\":\"SavedPassword\",\"DurationMS\":\"9\",\"Success\":\"True\"}\r\n) on CorrelationId\r\n| join kind = leftouter\r\n(  \r\n    WVDCheckpoints\r\n    | where Name =~ \"SSOTokenRetrieval\"\r\n    | project CorrelationId, ssotokeretrieval = Parameters.DurationMS\r\n) on CorrelationId\r\n| extend LogonTime = (ProductiveTime - TimeGenerated) / 1s - (coalesce(credaquire,0)/1000) - (coalesce(ssotokeretrieval,0)/1000)\r\n| make-series Trend=avg(LogonTime) on TimeGenerated from ago(30d) to now() step 1d by GatewayRegion\r\n| extend AvgLoad = array_sum(Trend) / array_length(Trend)\r\n| sort by AvgLoad desc",
+                "size": 0,
+                "title": "Monthly Avg Logon Time by Gateway Region",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "GatewayRegion",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "AvgLoad",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "greenRed"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal",
+                        "maximumFractionDigits": 2,
+                        "maximumSignificantDigits": 3
+                      }
+                    }
+                  },
+                  "secondaryContent": {
+                    "columnMatch": "Trend",
+                    "formatter": 21,
+                    "formatOptions": {
+                      "palette": "green"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 1"
+            }
+          ]
+        },
+        "customWidth": "50",
+        "name": "group - 2",
+        "styleSettings": {
+          "showBorder": true
+        }
+      }
+    ],
+    "fallbackResourceIds": [
+      "Azure Monitor"
+    ],
+    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+  }
