@@ -1,0 +1,453 @@
+{
+    "version": "Notebook/1.0",
+    "items": [
+      {
+        "type": 1,
+        "content": {
+          "json": "# Weekly AVD Connection Errors"
+        },
+        "name": "text - 0"
+      },
+      {
+        "type": 9,
+        "content": {
+          "version": "KqlParameterItem/1.0",
+          "crossComponentResources": [
+            "{Subscriptions}"
+          ],
+          "parameters": [
+            {
+              "id": "a472ed31-86c5-4565-90da-ff38c4a6df47",
+              "version": "KqlParameterItem/1.0",
+              "name": "Subscriptions",
+              "type": 6,
+              "isRequired": true,
+              "multiSelect": true,
+              "quote": "'",
+              "delimiter": ",",
+              "typeSettings": {
+                "additionalResourceOptions": [
+                  "value::1",
+                  "value::all"
+                ],
+                "includeAll": true
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "defaultValue": "value::all"
+            },
+            {
+              "id": "4e98a640-0683-4e6f-b4dc-a0650734b1ad",
+              "version": "KqlParameterItem/1.0",
+              "name": "Workspaces",
+              "type": 5,
+              "isRequired": true,
+              "multiSelect": true,
+              "quote": "'",
+              "delimiter": ",",
+              "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| distinct id",
+              "crossComponentResources": [
+                "{Subscriptions}"
+              ],
+              "typeSettings": {
+                "additionalResourceOptions": [
+                  "value::1",
+                  "value::all"
+                ]
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "defaultValue": "value::all",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources"
+            },
+            {
+              "id": "bc00cd42-5f75-4ab8-b2ed-6d73ee2ab844",
+              "version": "KqlParameterItem/1.0",
+              "name": "Hostpools",
+              "type": 5,
+              "isRequired": true,
+              "multiSelect": true,
+              "quote": "'",
+              "delimiter": ",",
+              "query": "resources\r\n| where type =~ 'microsoft.desktopvirtualization/hostpools'\r\n| distinct id",
+              "crossComponentResources": [
+                "{Subscriptions}"
+              ],
+              "typeSettings": {
+                "additionalResourceOptions": [
+                  "value::1",
+                  "value::all"
+                ],
+                "showDefault": false
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources"
+            }
+          ],
+          "style": "pills",
+          "queryType": 1,
+          "resourceType": "microsoft.resourcegraph/resources"
+        },
+        "name": "parameters - 1"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "items": [
+            {
+              "type": 1,
+              "content": {
+                "json": "## Client Network Unavailable\r\n\r\nThe **Client Network Unavailable** (*ClientNetworkUnavailable*) error occurs when the RD gateway side of the client side connection is not available."
+              },
+              "name": "text - 0"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where  CodeSymbolic == \"ClientNetworkUnavailable\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "noDataMessage": "No data was found!",
+                "noDataMessageStyle": 3,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 1"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "## Connection Failed Client Disconnected\r\n\r\nThe **Client Failed Client Disconnected**(*ConnectionFailedClientDisconnect*) error occurs when the RD gateway side of the client side connection was unexpectedly terminated. \r\nThe likely cause of this is that a TCP Reset occured, but it's not the only reason that this error can occur."
+              },
+              "name": "text - 0 - Copy"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ConnectionFailedClientDisconnect\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "noDataMessage": "No data was found!",
+                "noDataMessageStyle": 3,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 3"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "## Connection Broken Missed Heartbeat Threshold Exceeded\r\n\r\nThe **Connection Broken Missed Heartbeat Threshold Exceeded**(*ConnectionBrokenMissedHeartbeatThresholdExceeded*) error occurs when the AVD client detected that no heartbeats where delivered for more than 16 seconds from an AVD Session Host.\r\n "
+              },
+              "name": "text - 0 - Copy - Copy"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ConnectionBrokenMissedHeartbeatThresholdExceeded\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "noDataMessage": "No data was found!",
+                "noDataMessageStyle": 3,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 3 - Copy"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "## Connection Initiation Sequence Timeout\r\n\r\nThe **Connection Initiation Sequence Timeout** (*ConnectionInitiationSequenceTimeout*) Connection failed due to a timeout waiting for the connection initiation sequence to complete. This may be because of pending credential prompt on the client.\r\n "
+              },
+              "name": "text - 0 - Copy - Copy - Copy"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ConnectionInitiationSequenceTimeout\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "noDataMessage": "No data was found!",
+                "noDataMessageStyle": 3,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 3 - Copy - Copy"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "## Connection Failed Reverse Ungraceful Close\r\n\r\nThe **Connection Failed Reverse Ungraceful Close** (*ConnectionFailedReverseUngracefulClose*) error caused when the AVD gateway tried to close its connection to VM and discovered the connection was lost already. This error can be caused by a lot of different reasons. This error message is just the result of the RD Gateway noticing the connection has been lost.\r\n "
+              },
+              "name": "text - 0 - Copy - Copy - Copy - Copy"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ConnectionFailedReverseUngracefulClose\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "noDataMessage": "No data was found!",
+                "noDataMessageStyle": 3,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 3 - Copy - Copy - Copy"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "## Connection Failed Server Disconnect\r\n\r\nThe **Connection Failed Server Disconnect** (*ConnectionFailedServerDisconnect*) error is caused when the VM connection to the AVD gateway is disconnected suddenly. \r\n "
+              },
+              "name": "text - 0 - Copy - Copy - Copy - Copy - Copy"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"ConnectionFailedServerDisconnect\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "noDataMessage": "No data was found!",
+                "noDataMessageStyle": 3,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 3 - Copy - Copy - Copy - Copy"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "## Transport Closed Unexpectedly\r\n\r\nThe **Transport Closed Unexpectedly** (*TransportClosedUnexpectedly*) error is caused when The RD gateway side of the client side connection was unexpectedly terminated.\r\n "
+              },
+              "name": "text - 0 - Copy - Copy - Copy - Copy - Copy - Copy"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"TransportClosedUnexpectedly\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "noDataMessage": "No data was found!",
+                "noDataMessageStyle": 3,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 3 - Copy - Copy - Copy - Copy - Copy"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "## Unexpected Network Disconnect\r\n\r\nThe **Unexpected Network Disconnect** (*UnexpectedNetworkDisconnect*) error is caused when the session host suddenly loses connectivity.\r\n "
+              },
+              "name": "text - 0 - Copy - Copy - Copy - Copy - Copy - Copy - Copy"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "WVDErrors\r\n| where TimeGenerated > ago(28d)\r\n| where CodeSymbolic == \"UnexpectedNetworkDisconnect\" \r\n| summarize \r\n            UniqueUsers = dcount(UserName)\r\n        by bin_at(TimeGenerated, 7d, ago(28d))\r\n| sort by TimeGenerated asc",
+                "size": 3,
+                "noDataMessage": "No data was found!",
+                "noDataMessageStyle": 3,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                  "{Workspaces}"
+                ],
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": true,
+                      "formatName": "monthDayPattern"
+                    }
+                  },
+                  "leftContent": {
+                    "columnMatch": "UniqueUsers",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "showBorder": true
+                }
+              },
+              "name": "query - 3 - Copy - Copy - Copy - Copy - Copy - Copy"
+            }
+          ]
+        },
+        "name": "group - 2",
+        "styleSettings": {
+          "showBorder": true
+        }
+      }
+    ],
+    "fallbackResourceIds": [
+      "Azure Monitor"
+    ],
+    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+  }
