@@ -35,7 +35,7 @@ param (
     [string]$OAIAccountName,
 
     [Parameter(Mandatory = $false)]
-    [string]$ServiceTagWebPage = "https://www.microsoft.com/en-us/download/confirmation.aspx?id=57063",
+    [string]$ServiceTagWebPage = "https://www.microsoft.com/en-us/download/details.aspx?id=56519",
 
     [Parameter(Mandatory = $true)]
     [string]$subscriptionId

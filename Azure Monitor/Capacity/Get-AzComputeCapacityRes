@@ -1,0 +1,15 @@
+$location = "eastasia"
+$vmSku = ""
+
+$vmsizes = Get-AzComputeResourceSku | Where-Object { $_.ResourceType -eq "virtualMachines" }
+foreach ($vmsize in $vmsizes) {
+    foreach ($capability in $vmsize.capabilities) {  
+        if ($capability.Name -eq 'CapacityReservationSupported' -and $capability.Value -eq 'True')
+        { 
+            $vmsize.Locations
+            write-host "+++++++++++++++++++++++++++++"
+            $vmsize.name
+            $vmsize.RestrictionInfo
+         } 
+    } 
+}
