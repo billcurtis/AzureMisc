@@ -1,0 +1,51 @@
+let Connections = WVDConnections
+    | where TimeGenerated >= ago(24h)
+    | where State == "Completed" or State == "Connected"
+    | summarize LatestTimeGenerated = arg_max(TimeGenerated, *) by CorrelationId, State
+    | join kind=leftouter ( 
+        WVDErrors
+        | project CorrelationId, CodeSymbolic, ErrorTimeGenerated = TimeGenerated
+        )
+        on CorrelationId
+    | join kind=leftouter ( 
+        WVDConnectionNetworkData
+        | project
+            CorrelationId,
+            EstAvailableBandwidthKBps,
+            EstRoundTripTimeInMs,
+            NetDataTimeGenerated = TimeGenerated
+        )
+        on CorrelationId;
+Connections
+| where isnotempty(CorrelationId)
+| summarize 
+    StartTime = min(LatestTimeGenerated), 
+    EndTime = max(LatestTimeGenerated),
+    StartUserName = arg_min(LatestTimeGenerated, UserName),
+    EndUserName = arg_max(LatestTimeGenerated, UserName),
+    TransType = arg_max(LatestTimeGenerated, TransportType),
+    ErrMsg = arg_max(ErrorTimeGenerated, CodeSymbolic),
+    EstAvBandwith = arg_max(NetDataTimeGenerated, EstAvailableBandwidthKBps),
+    EstRTT = arg_max(NetDataTimeGenerated, EstRoundTripTimeInMs)
+    by CorrelationId, GatewayRegion, ClientOS, ClientSideIPAddress, SessionHostName
+| extend TimeDelta = EndTime - StartTime
+| extend Transport_Type = TransportType
+| extend User = UserName
+| extend LastLogin = StartTime
+| extend LastLogoff = EndTime
+| extend Error_Message = ErrMsg
+| project
+    UserName,
+    StartTime,
+    EndTime,
+    TransportType,
+    TimeDelta,
+    CodeSymbolic,
+    GatewayRegion,
+    EstAvailableBandwidthKBps,
+    EstRoundTripTimeInMs,
+    SessionHostName,
+    ClientOS,
+    ClientSideIPAddress,    
+    CorrelationId
+
