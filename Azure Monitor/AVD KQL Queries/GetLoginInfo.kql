@@ -1,9 +1,21 @@
 let Connections = WVDConnections
-    | where TimeGenerated >= ago(24h)
+    | where TimeGenerated >= ago(7d)
     | where State == "Completed" or State == "Connected"
     | summarize LatestTimeGenerated = arg_max(TimeGenerated, *) by CorrelationId, State
     | join kind=leftouter ( 
         WVDErrors
+        | where CodeSymbolic != "LogonTimeout"
+        | where CodeSymbolic != "ClientNetworkUnavailable"
+        | where CodeSymbolic != "TransportClosedUnexpectedly"
+        | where CodeSymbolic != "ConnectionFailedClientDisconnect"
+        | where CodeSymbolic != "ConnectionFailedReverseUngracefulClose"
+        | where CodeSymbolic != "ShortpathTransportTurnServerShutdown"
+        | where CodeSymbolic != "GraphicsCapsNotReceived"
+        | where CodeSymbolic != "SideTransportTurnServerShutdown"
+        | where CodeSymbolic != "StackCrash"
+        | where CodeSymbolic != "UnexpectedNetworkDisconnect"
+        | where CodeSymbolic != "ConnectionFailedServerDisconnect"
+        | where CodeSymbolic != "SideTransportReadThreadHang"
         | project CorrelationId, CodeSymbolic, ErrorTimeGenerated = TimeGenerated
         )
         on CorrelationId
@@ -48,4 +60,3 @@ Connections
     ClientOS,
     ClientSideIPAddress,    
     CorrelationId
-

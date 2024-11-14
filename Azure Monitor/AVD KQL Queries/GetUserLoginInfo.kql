@@ -5,6 +5,18 @@ let Connections = WVDConnections
     | summarize LatestTimeGenerated = arg_max(TimeGenerated, *) by CorrelationId, State
     | join kind=leftouter ( 
         WVDErrors
+        | where CodeSymbolic != "LogonTimeout"
+        | where CodeSymbolic != "ClientNetworkUnavailable"
+        | where CodeSymbolic != "TransportClosedUnexpectedly"
+        | where CodeSymbolic != "ConnectionFailedClientDisconnect"
+        | where CodeSymbolic != "ConnectionFailedReverseUngracefulClose"
+        | where CodeSymbolic != "ShortpathTransportTurnServerShutdown"
+        | where CodeSymbolic != "GraphicsCapsNotReceived"
+        | where CodeSymbolic != "SideTransportTurnServerShutdown"
+        | where CodeSymbolic != "StackCrash"
+        | where CodeSymbolic != "UnexpectedNetworkDisconnect"
+        | where CodeSymbolic != "ConnectionFailedServerDisconnect"
+        | where CodeSymbolic != "SideTransportReadThreadHang"
         | project CorrelationId, CodeSymbolic, ErrorTimeGenerated = TimeGenerated
         )
         on CorrelationId
@@ -21,21 +33,13 @@ Connections
 | where isnotempty(CorrelationId)
 | summarize 
     StartTime = min(LatestTimeGenerated), 
-    EndTime = max(LatestTimeGenerated),
-    StartUserName = arg_min(LatestTimeGenerated, UserName),
-    EndUserName = arg_max(LatestTimeGenerated, UserName),
-    TransType = arg_max(LatestTimeGenerated, TransportType),
-    ErrMsg = arg_max(ErrorTimeGenerated, CodeSymbolic),
-    EstAvBandwith = arg_max(NetDataTimeGenerated, EstAvailableBandwidthKBps),
-    EstRTT = arg_max(NetDataTimeGenerated, EstRoundTripTimeInMs)
-    by CorrelationId, GatewayRegion, ClientOS, ClientSideIPAddress, SessionHostName
+    EndTime = max(LatestTimeGenerated)
+    by CorrelationId, GatewayRegion, ClientOS, ClientSideIPAddress, SessionHostName, UserName, TransportType, CodeSymbolic,EstAvailableBandwidthKBps, EstRoundTripTimeInMs
 | extend TimeDelta = EndTime - StartTime
-| extend Transport_Type = TransportType
-| extend User = UserName
 | extend LastLogin = StartTime
 | extend LastLogoff = EndTime
-| extend Error_Message = ErrMsg
 | project
+    CorrelationId,
     UserName,
     StartTime,
     EndTime,
@@ -47,6 +51,6 @@ Connections
     EstRoundTripTimeInMs,
     SessionHostName,
     ClientOS,
-    ClientSideIPAddress,    
-    CorrelationId
+    ClientSideIPAddress
+    
 
