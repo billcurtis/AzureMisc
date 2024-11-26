@@ -14,7 +14,14 @@ $AzFileShareName = "XXXXXXXXXXXXXXXX" #Replace with name of File Share
 $DriveLetterforShare = "Z"  # replace with drive letter for share
 
 # Get the Azure Instance Metadata Service (IMDS) token for this Azure VM's Managed Identity
-$ImdsResponse = Invoke-RestMethod -Method Get -Headers @{Metadata = "true" } -Uri "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net"
+
+$params = @{
+    Method = "Get"
+    Headers = @{Metadata = "true" }
+    Uri = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net"
+}
+
+$ImdsResponse = Invoke-RestMethod @params
 
 # Extract the access token
 $AccessToken = $ImdsResponse.access_token
@@ -22,7 +29,13 @@ $AccessToken = $ImdsResponse.access_token
 # Use the access token to call the Azure Key Vault REST API
 $KeyVaultUri = "https://$KeyVaultName.vault.azure.net/secrets/$($SecretName)?api-version=7.3"
 $Headers = @{Authorization = "Bearer $AccessToken" }
-$KeyVaultResponse = Invoke-RestMethod -Method Get -Headers $Headers -Uri $KeyVaultUri
+
+$params = @{
+    Method = "Get"
+    Headers = $Headers
+    Uri = $KeyVaultUri
+}
+$KeyVaultResponse = Invoke-RestMethod @params
 
 # Extract the secret value
 $storageAcctKey = $KeyVaultResponse.value
