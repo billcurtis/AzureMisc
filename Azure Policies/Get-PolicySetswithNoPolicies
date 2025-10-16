@@ -1,0 +1,50 @@
+# Get All Azure Policy Sets and validate referenced policies
+
+# Login to Azure
+#Connect-AzAccount
+
+# Get all Policy Sets (Initiatives)
+$policySets = Get-AzPolicySetDefinition | Where-Object { $_.Properties.policytype -eq "Custom" }
+
+# Initialize an array to store invalid Policy Sets
+$invalidPolicySets = @()
+
+foreach ($policySet in $policySets) {
+    Write-Host "Checking Policy Set: $($policySet.Properties.DisplayName)" -ForegroundColor Cyan
+
+    # Get the referenced policies in the Policy Set
+    $referencedPolicies = $policySet.Properties.policyDefinitions
+
+    # Initialize a flag to track invalid references
+    $hasInvalidPolicies = $false
+
+    foreach ($policy in $referencedPolicies) {
+        $policyId = $policy.policyDefinitionId
+
+        # Check if the policy exists
+        
+            $policyDefinition = Get-AzPolicyDefinition  | Where-Object { $_.PolicyDefinitionId -eq $policyId }
+
+        if (!$policyDefinition) {
+      
+            Write-Host "Invalid Policy Reference: $policyId" -ForegroundColor Red
+            $hasInvalidPolicies = $true
+    }
+        
+    }
+
+    # If invalid policies are found, add the Policy Set to the invalid list
+    if ($hasInvalidPolicies) {
+        $invalidPolicySets += $policySet
+    }
+}
+
+# Output the Policy Sets with invalid references
+if ($invalidPolicySets.Count -gt 0) {
+    Write-Host "Policy Sets with invalid references:" -ForegroundColor Yellow
+    $invalidPolicySets | ForEach-Object {
+        Write-Host " - $($_.DisplayName) ($($_.PolicySetDefinitionId))" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "All Policy Sets have valid references." -ForegroundColor Green
+}

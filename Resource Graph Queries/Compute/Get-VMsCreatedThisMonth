@@ -1,0 +1,40 @@
+# Ensure Az module is installed
+# Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force
+
+# Connect to Azure
+Connect-AzAccount -Tenant $tenantid
+
+# Get all subscriptions and build a mapping table
+$subscriptions = Get-AzSubscription -TenantId 
+$subMap = @{}
+$subscriptions | ForEach-Object {
+    $subMap[$_.Id] = $_.Name
+}
+
+# Define the KQL query
+$kqlQuery = @"
+Resources
+| where type == "microsoft.compute/virtualmachines"
+| extend creationTime = todatetime(properties.timeCreated)
+| where isnotempty(creationTime)
+| where creationTime >= startofmonth(now())
+| summarize vmCount = count() by subscriptionId, location
+| order by subscriptionId asc, location asc
+"@
+
+# Execute the query across all subscriptions
+$argResults = Search-AzGraph -Query $kqlQuery
+
+# Replace subscriptionId with subscription name
+$resultsWithNames = $argResults | Select-Object `
+@{Name = 'SubscriptionName'; Expression = { $subMap[$_.subscriptionId] } },
+@{Name = 'Location'; Expression = { $_.location } },
+@{Name = 'VMCount'; Expression = { $_.vmCount } },
+@{Name = 'RunDate'; Expression = { (Get-Date).ToString("yyyy-MM-dd") } }
+
+# Get the current Month
+$currentMonth = (Get-Date).ToString("MMMM")
+
+# Output the results
+$resultsWithNames | Format-Table -AutoSize
+
