@@ -276,9 +276,15 @@ param(
     #Get access token
     $accessToken = Get-ValidToken
 
+    Write-Host "Starting parallel processing of $($devices.Count) devices with throttle limit of 3..." -ForegroundColor Green
+    Write-Host "This may take some time due to rate limiting controls..." -ForegroundColor Yellow
+
     # iterate through each device in $devices using foreach-object -Parallel get all app information for that device
     $results = @()
-    $results += $devices | ForEach-Object -ThrottleLimit 20 -Parallel {
+    $results += $devices | ForEach-Object -ThrottleLimit 3 -Parallel {
+        
+        # Add small random delay to stagger requests
+        Start-Sleep -Milliseconds (Get-Random -Minimum 100 -Maximum 500)
     
         #functions
         function Invoke-GraphRequestWithRetry {
@@ -288,7 +294,7 @@ param(
                 [string]$Method = "GET",
                 [object]$Body = $null,
                 [string]$ContentType = "application/json",
-                [int]$MaxRetries = 3
+                [int]$MaxRetries = 5
             )
         
             $retryCount = 0
@@ -308,27 +314,43 @@ param(
                     return Invoke-RestMethod @params
                 }
                 catch {
-                    # Only handle rate limit errors (429 TooManyRequests)
-                    if ($_.Exception.Response.StatusCode -eq 429 -or $_.Exception.Message -like "*TooManyRequests*") {
+                    $statusCode = $null
+                    $errorMessage = $_.Exception.Message
+                    
+                    # Try to get status code from different possible locations
+                    if ($_.Exception.Response.StatusCode) {
+                        $statusCode = $_.Exception.Response.StatusCode.value__
+                    }
+                    elseif ($_.Exception.Message -match 'HTTP\s+(\d+)') {
+                        $statusCode = [int]$matches[1]
+                    }
+                    
+                    # Handle rate limit errors (429 TooManyRequests)
+                    if ($statusCode -eq 429 -or $errorMessage -like "*TooManyRequests*" -or $errorMessage -like "*throttled*") {
                         $retryCount++
                     
                         if ($retryCount -le $MaxRetries) {
                             # Get Retry-After header if available, otherwise use exponential backoff
-                            $retryAfter = 60 # Default
+                            $retryAfter = 30 # Default 30 seconds
                             if ($_.Exception.Response.Headers -and $_.Exception.Response.Headers["Retry-After"]) {
                                 $retryAfter = [int]$_.Exception.Response.Headers["Retry-After"]
                             }
                             else {
-                                $retryAfter = [Math]::Pow(2, $retryCount) * 10 # 10s, 20s, 40s
+                                $retryAfter = [Math]::Pow(2, $retryCount) * 15 # 30s, 60s, 120s, 240s, 480s
                             }
                         
-                            Write-Warning "Rate limit hit for device query. Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
+                            Write-Warning "Rate limit hit for device query (Status: $statusCode). Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
                             Start-Sleep -Seconds $retryAfter
                             continue
                         }
+                        else {
+                            Write-Error "Max retries exceeded for rate limiting. Error: $errorMessage"
+                            throw $_
+                        }
                     }
                 
-                    # For all other errors or max retries exceeded, throw immediately
+                    # For all other errors, throw immediately
+                    Write-Error "API request failed with status $statusCode`: $errorMessage"
                     throw $_
                 }
             } while ($retryCount -le $MaxRetries)
@@ -423,7 +445,7 @@ param(
         $deviceModel = $_.model
         $deviceManufacturer = $_.manufacturer
 
-        Write-Verbose -Message "Processing device: $deviceName (ID: $deviceId)" 
+        Write-Host -Message "Processing device: $deviceName (ID: $deviceId)" -ForegroundColor Cyan 
         Get-DeviceDiscoveredApps -DeviceId $deviceId -DeviceName $deviceName | ForEach-Object {
             $dAppresults += [PSCustomObject]@{
                 DeviceName        = $deviceName
@@ -446,6 +468,9 @@ param(
         Write-Host -Message "Found $($dAppresults.Count) apps for device: $deviceName"
         return $dAppresults
     }
+
+Write-Host "`nParallel processing completed! Collected data from $($devices.Count) devices." -ForegroundColor Green
+Write-Host "Total app records found: $($results.Count)" -ForegroundColor Green
 
 # Calculate and display script execution time
 $endTime = Get-Date
