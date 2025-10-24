@@ -3,7 +3,7 @@
     <#
 .DESCRIPTION
     This script retrieves all managed iOS and Android devices from Microsoft Intune via Microsoft Graph API,
-    then fetches the list of installed applications for each device, handling rate limits with retries and backoff. 
+    then fetches the list of installed applications for each device, handling rate limits with retries and backoffs. 
 
 .PARAMETER IOSOnly
     Retrieve applications only for iOS devices.
