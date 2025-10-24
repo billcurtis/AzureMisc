@@ -30,7 +30,7 @@
 .NOTES
     Requires PowerShell 7.0+ and Azure PowerShell modules
     Run as an account with Contributor permissions on the VMs and Host Pool
-#>
+
 
 param(
     [Parameter(Mandatory = $true)]
@@ -47,6 +47,7 @@ param(
     [int]$ThrottleLimit = 10
 )
 
+#>
 # Start timing the script execution
 $startTime = Get-Date
 
@@ -145,7 +146,8 @@ function Get-SessionHosts {
 # Function to get VM information and filter deallocated VMs
 function Get-DeallocatedVMs {
     param(
-        [array]$SessionHosts
+        [array]$SessionHosts,
+        [string]$TenantId
     )
     
     Write-Verbose "Checking VM power states to find deallocated VMs..."
@@ -155,58 +157,28 @@ function Get-DeallocatedVMs {
     foreach ($sessionHost in $SessionHosts) {
         # Extract VM name from session host name
         # Session host names can be in format: "hostpool/vmname" or "vmname.domain.com"
-        $vmName = $sessionHost.Name
-        
-        Write-Verbose "Original session host name: $($sessionHost.Name)"
-        
-        # If it contains a forward slash, take the part after the slash
-        if ($vmName -like "*/*") {
-            $vmName = $vmName.Split('/')[-1]
-            Write-Verbose "Found forward slash, extracted: $vmName"
-        }
-        
-        # If it contains a dot (FQDN), take the part before the first dot
-        if ($vmName -like "*.*") {
-            $vmName = $vmName.Split('.')[0]
-            Write-Verbose "Found dot, extracted: $vmName"
-        }
+
+        $vmResID = $sessionHost.ResourceId
+        $vmSubscriptionId = ($vmResID -split '/')[2]
+        $vmName = ($vmResID -split '/')[8]
+
+
+        Write-Verbose "Session host name: $vmName"
         
         Write-Verbose "Processing session host: $($sessionHost.Name) -> VM name: $vmName"
-        
-        # Validate that we have a clean VM name
-        if ([string]::IsNullOrEmpty($vmName) -or $vmName -eq $sessionHost.Name) {
-            Write-Warning "Could not extract valid VM name from session host '$($sessionHost.Name)'. Skipping."
-            continue
-        }
-        
-        try {
-            # Try to find the VM - first attempt without specifying resource group
-            $vm = $null
-            $vmResourceGroup = $null
             
+        try {
+
+            # Set context to the VM's subscription
+            Set-AzContext -SubscriptionId $vmSubscriptionId -TenantId $TenantId -ErrorAction Stop | Out-Null
             try {
-                $vm = Get-AzVM -Name $vmName -ErrorAction Stop
+                $vm = Get-AzVM -ResourceId $vmResID -ErrorAction Stop
                 $vmResourceGroup = $vm.ResourceGroupName
                 Write-Verbose "Found VM '$vmName' in resource group: $vmResourceGroup"
             }
             catch {
                 # If VM not found with simple name, try searching across all resource groups
-                Write-Verbose "VM '$vmName' not found with simple lookup, searching across resource groups..."
-                $allVMs = Get-AzVM | Where-Object { $_.Name -eq $vmName }
-                
-                if ($allVMs.Count -eq 1) {
-                    $vm = $allVMs[0]
-                    $vmResourceGroup = $vm.ResourceGroupName
-                    Write-Verbose "Found VM '$vmName' in resource group: $vmResourceGroup"
-                }
-                elseif ($allVMs.Count -gt 1) {
-                    Write-Warning "Multiple VMs found with name '$vmName' in different resource groups. Skipping."
-                    continue
-                }
-                else {
-                    Write-Warning "No VM found with name '$vmName'. Skipping session host '$($sessionHost.Name)'."
-                    continue
-                }
+                Write-Verbose "VM '$vmName' not found"
             }
             
             # Validate that we have both VM and resource group
@@ -216,7 +188,7 @@ function Get-DeallocatedVMs {
             }
             
             # Get VM power state
-            $vmStatus = Get-AzVM -ResourceGroupName $vmResourceGroup -Name $vmName -Status -ErrorAction Stop
+            $vmStatus = Get-AzVM -ResourceId $vmResID -Status -ErrorAction Stop
             $powerState = ($vmStatus.Statuses | Where-Object { $_.Code -like "PowerState/*" }).DisplayStatus
             
             Write-Verbose "VM: $vmName - Resource Group: $vmResourceGroup - Power State: $powerState"
@@ -374,6 +346,8 @@ try {
     if (-not (Connect-ToAzure)) {
         throw "Failed to connect to Azure"
     }
+    $tenantId = (Get-AzContext).Tenant.Id
+    Write-Verbose "Operating under Tenant ID: $tenantId"
     
     # Step 2: Get Host Pool information
     $hostPool = Get-HostPoolInfo -HostPoolName $HostPoolName -ResourceGroupName $ResourceGroupName
@@ -387,8 +361,8 @@ try {
     }
     
     # Step 4: Get deallocated VMs
-    $deallocatedVMs = Get-DeallocatedVMs -SessionHosts $sessionHosts
-    
+    $deallocatedVMs = Get-DeallocatedVMs -SessionHosts $sessionHosts -TenantId $tenantId
+
     if ($deallocatedVMs.Count -eq 0) {
         Write-Verbose "No deallocated VMs found. All VMs are either running or in other states."
         Write-Verbose "Only deallocated VMs can have their storage migrated safely."
