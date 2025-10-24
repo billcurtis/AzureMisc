@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 
 # Hardcoded configuration
-$UploadOnlyUnhealthy = $false
+$UploadOnlyUnhealthy = $true
 $StorageAccountName = "xxxxxxx"
 $StorageAccountKey = "xxxxxxxxxx"
 $TableName = "WindowsImageHealth"
