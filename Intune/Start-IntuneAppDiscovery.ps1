@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 
-    <#
+<#
 .DESCRIPTION
     This script retrieves all managed iOS and Android devices from Microsoft Intune via Microsoft Graph API,
     then fetches the list of installed applications for each device, handling rate limits with retries and backoffs. 
@@ -28,11 +28,23 @@
     Exclude common system/framework apps from the results based on predefined patterns
     hardcoded in the script.
 
+.PARAMETER ThrottleLimit
+    Number of devices to process in parallel during fallback mode (1-10, default: 1).
+    Lower values reduce API throttling but increase processing time.
+
+.PARAMETER BatchSize
+    Number of devices to process per batch during fallback mode (1-100, default: 25).
+    Smaller batches reduce memory usage and allow for better progress tracking.
+
+.PARAMETER InterBatchDelay
+    Delay in seconds between processing batches during fallback mode (0-300, default: 30).
+    Higher values reduce API throttling but increase total processing time.
+
 .EXAMPLE
     # Get all Windows devices, exclude system apps, and export to CSV
     ./Start-IntuneAppDiscovery.ps1 -WindowsOnly -ExcludePatterns -ExportToCSV 
 
-    # GGet only iOS and Android devices and export to CSV
+    # Get only iOS and Android devices and export to CSV
     ./Start-IntuneAppDiscovery.ps1 -IOSAndAndroidOnly -ExportToCSV
 
     # Get all devices but exclude system apps
@@ -40,6 +52,12 @@
 
     # Normal run without filtering
     ./Start-IntuneAppDiscovery.ps1 -ExportToCSV
+    
+    # Aggressive performance settings (use with caution)
+    ./Start-IntuneAppDiscovery.ps1 -WindowsOnly -ThrottleLimit 3 -BatchSize 50 -InterBatchDelay 15 -ExportToCSV
+    
+    # Conservative settings for rate limit sensitive environments
+    ./Start-IntuneAppDiscovery.ps1 -AndroidOnly -ThrottleLimit 1 -BatchSize 10 -InterBatchDelay 60 -ExportToCSV
 
 .NOTES
     clientId, clientSecret, and tenantId are hardcoded for simplicity.
@@ -57,235 +75,269 @@ param(
     [switch]$MacOSOnly,
     [switch]$WindowsOnly,
     [switch]$ExportToCSV,
-    [switch]$ExcludePatterns
+    [switch]$ExcludePatterns,
+    
+    # Performance tuning parameters
+    [Parameter(HelpMessage = "Number of devices to process in parallel (default: 50)")]
+    [ValidateRange(1, 100)]
+    [int]$ThrottleLimit = 40,
+    
+    [Parameter(HelpMessage = "Number of devices to process per batch (default: 100)")]
+    [ValidateRange(1, 200)]
+    [int]$BatchSize = 100,
+    
+    [Parameter(HelpMessage = "Delay in seconds between batches (default: 30)")]
+    [ValidateRange(0, 300)]
+    [int]$InterBatchDelay = 30
 )
 
 
-    # Start timing the script execution
-    $startTime = Get-Date
+# Hardcoded credentials for Microsoft Graph API authentication
 
-    # Define exclusion patterns for filtering out system/framework apps
-    $ExclusionPatterns = @(
-        "Microsoft.NET.*",
-        "Microsoft.VCLibs.*",
-        "Microsoft.UI.Xaml.*",
-        "*.GameAssist",
-        "*.QuickAssist",
-        "*ShellExtension*",
-        "Microsoft.Windows.DevHome",
-        "*CorporationII*"
+$clientId = "<YOUR_CLIENT_ID"
+$clientSecret = "<YOUR_CLIENT_SECRET>"
+$tenantId = "<YOUR_TENANT_ID>"
+
+# Start timing the script execution
+$startTime = Get-Date
+
+# Define exclusion patterns for filtering out system/framework apps
+$ExclusionPatterns = @(
+    "Microsoft.NET.*",
+    "Microsoft.VCLibs.*",
+    "Microsoft.UI.Xaml.*",
+    "*.GameAssist",
+    "*.QuickAssist",
+    "*ShellExtension*",
+    "Microsoft.Windows.DevHome",
+    "*CorporationII*"
+)
+
+
+# preferences
+$ErrorActionPreference = "Stop"
+$VerbosePreference = "Continue"
+
+# Global variables for token management
+$Global:CurrentToken = $null
+$Global:TokenExpiration = $null
+
+function Get-AuthToken {
+    $body = @{
+        "grant_type"    = "client_credentials"
+        "client_id"     = $clientId
+        "client_secret" = $clientSecret
+        "scope"         = "https://graph.microsoft.com/.default"
+    }
+    $uri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+        
+    try {
+        $response = Invoke-RestMethod -Uri $uri -Method Post -Body $body
+            
+        # Store token and calculate expiration time (subtract 5 minutes for safety buffer)
+        $Global:CurrentToken = $response.access_token
+        $Global:TokenExpiration = (Get-Date).AddSeconds($response.expires_in - 300)
+            
+        Write-Host "New token acquired, expires at: $($Global:TokenExpiration.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Green
+            
+        return $response.access_token
+    }
+    catch {
+        Write-Error "Failed to acquire authentication token: $_"
+        throw
+    }
+}
+
+function Get-ValidToken {
+    # Check if we have a token and if it's still valid
+    if ($null -eq $Global:CurrentToken -or (Get-Date) -gt $Global:TokenExpiration) {
+        Write-Host "Token expired or missing, acquiring new token..." -ForegroundColor Yellow
+        return Get-AuthToken
+    }
+        
+    # Token is still valid
+    $timeRemaining = $Global:TokenExpiration - (Get-Date)
+    Write-Verbose "Using existing token, expires in $([math]::Round($timeRemaining.TotalMinutes, 1)) minutes"
+    return $Global:CurrentToken
+}
+
+function Invoke-GraphRequestWithRetry {
+    param(
+        [string]$Uri,
+        [hashtable]$Headers,
+        [string]$Method = "GET",
+        [object]$Body = $null,
+        [string]$ContentType = "application/json",
+        [int]$MaxRetries = 3
     )
-
-    $clientId = "<client_id>"
-    $clientSecret = "<client_secret>"
-    $tenantId = "<tenant_id>"
-
-    # preferences
-    $ErrorActionPreference = "Stop"
-    $VerbosePreference = "Continue"
-
-    # Global variables for token management
-    $Global:CurrentToken = $null
-    $Global:TokenExpiration = $null
-
-    function Get-AuthToken {
-        $body = @{
-            "grant_type"    = "client_credentials"
-            "client_id"     = $clientId
-            "client_secret" = $clientSecret
-            "scope"         = "https://graph.microsoft.com/.default"
-        }
-        $uri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
-        
+    
+    $retryCount = 0
+    do {
         try {
-            $response = Invoke-RestMethod -Uri $uri -Method Post -Body $body
+            # Ensure we have a valid token
+            $validToken = Get-ValidToken
+            $Headers["Authorization"] = "Bearer $validToken"
+                
+            $params = @{
+                Uri     = $Uri
+                Headers = $Headers
+                Method  = $Method
+            }
             
-            # Store token and calculate expiration time (subtract 5 minutes for safety buffer)
-            $Global:CurrentToken = $response.access_token
-            $Global:TokenExpiration = (Get-Date).AddSeconds($response.expires_in - 300)
+            if ($Body) {
+                $params.Body = $Body
+                $params.ContentType = $ContentType
+            }
             
-            Write-Host "New token acquired, expires at: $($Global:TokenExpiration.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Green
-            
-            return $response.access_token
+            return Invoke-RestMethod @params
         }
         catch {
-            Write-Error "Failed to acquire authentication token: $_"
-            throw
-        }
-    }
-
-    function Get-ValidToken {
-        # Check if we have a token and if it's still valid
-        if ($null -eq $Global:CurrentToken -or (Get-Date) -gt $Global:TokenExpiration) {
-            Write-Host "Token expired or missing, acquiring new token..." -ForegroundColor Yellow
-            return Get-AuthToken
-        }
-        
-        # Token is still valid
-        $timeRemaining = $Global:TokenExpiration - (Get-Date)
-        Write-Verbose "Using existing token, expires in $([math]::Round($timeRemaining.TotalMinutes, 1)) minutes"
-        return $Global:CurrentToken
-    }
-
-    function Invoke-GraphRequestWithRetry {
-        param(
-            [string]$Uri,
-            [hashtable]$Headers,
-            [string]$Method = "GET",
-            [object]$Body = $null,
-            [string]$ContentType = "application/json",
-            [int]$MaxRetries = 3
-        )
-    
-        $retryCount = 0
-        do {
-            try {
-                # Ensure we have a valid token
-                $validToken = Get-ValidToken
-                $Headers["Authorization"] = "Bearer $validToken"
+            $retryCount++
                 
-                $params = @{
-                    Uri     = $Uri
-                    Headers = $Headers
-                    Method  = $Method
+            # Handle authentication errors (401 Unauthorized)
+            if ($_.Exception.Response.StatusCode -eq 401) {
+                if ($retryCount -le $MaxRetries) {
+                    Write-Warning "Authentication failed, refreshing token and retrying... (Attempt $retryCount/$MaxRetries)"
+                    # Force token refresh by clearing current token
+                    $Global:CurrentToken = $null
+                    $Global:TokenExpiration = $null
+                    Start-Sleep -Seconds 2
+                    continue
                 }
-            
-                if ($Body) {
-                    $params.Body = $Body
-                    $params.ContentType = $ContentType
-                }
-            
-                return Invoke-RestMethod @params
             }
-            catch {
-                $retryCount++
                 
-                # Handle authentication errors (401 Unauthorized)
-                if ($_.Exception.Response.StatusCode -eq 401) {
-                    if ($retryCount -le $MaxRetries) {
-                        Write-Warning "Authentication failed, refreshing token and retrying... (Attempt $retryCount/$MaxRetries)"
-                        # Force token refresh by clearing current token
-                        $Global:CurrentToken = $null
-                        $Global:TokenExpiration = $null
-                        Start-Sleep -Seconds 2
-                        continue
+            # Handle rate limit errors (429 TooManyRequests)
+            if ($statusCode -eq 429 -or $errorMessage -like "*TooManyRequests*" -or $errorMessage -like "*throttled*") {                
+                if ($retryCount -le $MaxRetries) {
+                    # Enhanced exponential backoff with cap for main function
+                    $retryAfter = 60 # Default 60 seconds for rate limits
+                    if ($_.Exception.Response.Headers -and $_.Exception.Response.Headers["Retry-After"]) {
+                        $retryAfter = [int]$_.Exception.Response.Headers["Retry-After"]
                     }
-                }
-                
-                # Handle rate limit errors (429 TooManyRequests)
-                if ($_.Exception.Response.StatusCode -eq 429 -or $_.Exception.Message -like "*TooManyRequests*") {                
-                    if ($retryCount -le $MaxRetries) {
-                        # Get Retry-After header if available, otherwise use exponential backoff
-                        $retryAfter = 30 # Default
-                        if ($_.Exception.Response.Headers -and $_.Exception.Response.Headers["Retry-After"]) {
-                            $retryAfter = [int]$_.Exception.Response.Headers["Retry-After"]
-                        }
-                        else {
-                            $retryAfter = [Math]::Pow(2, $retryCount) * 10 # 10s, 20s, 40s
-                        }
+                    else {
+                        # Progressive backoff: 60s, 120s, 240s, 300s (capped at 5 min)
+                        $retryAfter = [Math]::Min([Math]::Pow(2, $retryCount) * 30, 300)
+                    }
                     
-                        Write-Warning "Rate limit hit. Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
-                        Start-Sleep -Seconds $retryAfter
-                        continue
-                    }
+                    Write-Warning "Rate limit hit. Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
+                    Start-Sleep -Seconds $retryAfter
+                    continue
                 }
+            }
             
-                # For all other errors or max retries exceeded, throw immediately
-                throw $_
-            }
-        } while ($retryCount -le $MaxRetries)
-    }
-
-    function Get-AllManagedDevices {
-        try {
-            Write-Host "Fetching all managed devices..." -ForegroundColor Yellow
-
-            $allDevices = @()
-        
-            # Build URI with appropriate OS filter based on switches
-            $baseUri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices"
-            $filter = ""
-        
-            switch ($true) {
-                $IOSOnly { 
-                    $filter = "`?`$filter=operatingSystem eq 'iOS'"
-                    Write-Host "Filtering for iOS devices only..." -ForegroundColor Cyan
-                    break 
-                }
-                $AndroidOnly { 
-                    $filter = "`?`$filter=operatingSystem eq 'Android'"
-                    Write-Host "Filtering for Android devices only..." -ForegroundColor Cyan
-                    break 
-                }
-                $IOSAndAndroidOnly { 
-                    $filter = "`?`$filter=operatingSystem eq 'iOS' or operatingSystem eq 'Android'"
-                    Write-Host "Filtering for iOS and Android devices only..." -ForegroundColor Cyan
-                    break 
-                }
-                $MacOSOnly { 
-                    $filter = "`?`$filter=operatingSystem eq 'macOS'"
-                    Write-Host "Filtering for macOS devices only..." -ForegroundColor Cyan
-                    break 
-                }
-                $WindowsOnly { 
-                    $filter = "`?`$filter=operatingSystem eq 'Windows'"
-                    Write-Host "Filtering for Windows devices only..." -ForegroundColor Cyan
-                    break 
-                }
-                $AllOS { 
-                    $filter = ""
-                    Write-Host "Fetching devices for all operating systems..." -ForegroundColor Cyan
-                    break 
-                }
-                default { 
-                    $filter = ""
-                    Write-Host "No specific OS filter provided, fetching all devices..." -ForegroundColor Cyan
-                    break 
-                }
-            }
-        
-            $uri = $baseUri + $filter
-        
-            $accessToken = Get-ValidToken
-            $headers = @{
-                Authorization = "Bearer $accessToken"
-            }
-
-            do {
-                $response = Invoke-GraphRequestWithRetry -Uri $uri -Headers $headers
-                $allDevices += $response.value
-                $uri = $response.'@odata.nextLink'
-            } while ($uri)
-
-            Write-Host "Found $($allDevices.Count) devices" -ForegroundColor Green
-            return $allDevices
+            # For all other errors or max retries exceeded, throw immediately
+            throw $_
         }
-        catch {
-            Write-Error "Failed to get managed devices: $_"
-            return @()
-        }
-    }
+    } while ($retryCount -le $MaxRetries)
+}
 
-    #main
+function Get-AllManagedDevices {
+    try {
+        Write-Host "Fetching all managed devices..." -ForegroundColor Yellow
 
-    $devices = Get-AllManagedDevices
-
-    #get the time for end time
-    $endTime = Get-Date
-
-    #Get access token
-    $accessToken = Get-ValidToken
-
-    Write-Host "Starting parallel processing of $($devices.Count) devices with throttle limit of 3..." -ForegroundColor Green
-    Write-Host "This may take some time due to rate limiting controls..." -ForegroundColor Yellow
-
-    # iterate through each device in $devices using foreach-object -Parallel get all app information for that device
-    $results = @()
-    $results += $devices | ForEach-Object -ThrottleLimit 3 -Parallel {
+        $allDevices = @()
         
-        # Add small random delay to stagger requests
-        Start-Sleep -Milliseconds (Get-Random -Minimum 100 -Maximum 500)
+        # Build URI with appropriate OS filter and optimized select fields
+        $baseUri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices"
+        $selectFields = "`$select=id,deviceName,userPrincipalName,operatingSystem,osVersion,model,manufacturer"
+        $filter = ""
+        
+        switch ($true) {
+            $IOSOnly { 
+                $filter = "&`$filter=operatingSystem eq 'iOS'"
+                Write-Host "Filtering for iOS devices only..." -ForegroundColor Cyan
+                break 
+            }
+            $AndroidOnly { 
+                $filter = "&`$filter=operatingSystem eq 'Android'"
+                Write-Host "Filtering for Android devices only..." -ForegroundColor Cyan
+                break 
+            }
+            $IOSAndAndroidOnly { 
+                $filter = "&`$filter=operatingSystem eq 'iOS' or operatingSystem eq 'Android'"
+                Write-Host "Filtering for iOS and Android devices only..." -ForegroundColor Cyan
+                break 
+            }
+            $MacOSOnly { 
+                $filter = "&`$filter=operatingSystem eq 'macOS'"
+                Write-Host "Filtering for macOS devices only..." -ForegroundColor Cyan
+                break 
+            }
+            $WindowsOnly { 
+                $filter = "&`$filter=operatingSystem eq 'Windows'"
+                Write-Host "Filtering for Windows devices only..." -ForegroundColor Cyan
+                break 
+            }
+            $AllOS { 
+                $filter = ""
+                Write-Host "Fetching devices for all operating systems..." -ForegroundColor Cyan
+                break 
+            }
+            default { 
+                $filter = ""
+                Write-Host "No specific OS filter provided, fetching all devices..." -ForegroundColor Cyan
+                break 
+            }
+        }
+        
+        $uri = $baseUri + "?" + $selectFields + $filter
+        
+        $accessToken = Get-ValidToken
+        $headers = @{
+            Authorization = "Bearer $accessToken"
+        }
+
+        do {
+            $response = Invoke-GraphRequestWithRetry -Uri $uri -Headers $headers
+            $allDevices += $response.value
+            $uri = $response.'@odata.nextLink'
+        } while ($uri)
+
+        Write-Host "Found $($allDevices.Count) devices" -ForegroundColor Green
+        return $allDevices
+    }
+    catch {
+        Write-Error "Failed to get managed devices: $_"
+        return @()
+    }
+}
+
+#main
+
+Write-Host "Using individual device queries for app discovery..." -ForegroundColor Yellow
     
+$devices = Get-AllManagedDevices
+$totalDevicesScanned = $devices.Count
+Write-Host "Total devices to scan: $totalDevicesScanned" -ForegroundColor Green
+
+#get the time for end time
+$endTime = Get-Date
+
+#Get access token
+$accessToken = Get-ValidToken
+
+Write-Host "Starting batch processing of $($devices.Count) devices with throttle limit of $ThrottleLimit..." -ForegroundColor Green
+Write-Host "Batch size: $BatchSize devices per batch, Inter-batch delay: $InterBatchDelay seconds" -ForegroundColor Cyan
+Write-Host "This may take some time due to rate limiting controls..." -ForegroundColor Yellow
+
+# Process devices in smaller batches to reduce API pressure
+$results = @()
+    
+for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
+    $batchEnd = [Math]::Min($i + $BatchSize - 1, $devices.Count - 1)
+    $batch = $devices[$i..$batchEnd]
+        
+    Write-Host "Processing batch $([Math]::Floor($i / $BatchSize) + 1) of $([Math]::Ceiling($devices.Count / $BatchSize)) ($($batch.Count) devices)..." -ForegroundColor Cyan
+        
+    # Process current batch with configurable throttle limit
+    $batchResults = $batch | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+                
+        # Progressive delay based on position in batch
+        $deviceIndex = $using:i + [Array]::IndexOf($using:batch, $_)
+        $delayMs = [Math]::Min(1000 + ($deviceIndex * 200), 5000)
+        Start-Sleep -Milliseconds $delayMs
+    
+        
         #functions
         function Invoke-GraphRequestWithRetry {
             param(
@@ -296,7 +348,7 @@ param(
                 [string]$ContentType = "application/json",
                 [int]$MaxRetries = 5
             )
-        
+                
             $retryCount = 0
             do {
                 try {
@@ -305,18 +357,18 @@ param(
                         Headers = $Headers
                         Method  = $Method
                     }
-                
+                        
                     if ($Body) {
                         $params.Body = $Body
                         $params.ContentType = $ContentType
                     }
-                
+                        
                     return Invoke-RestMethod @params
                 }
                 catch {
                     $statusCode = $null
                     $errorMessage = $_.Exception.Message
-                    
+                            
                     # Try to get status code from different possible locations
                     if ($_.Exception.Response.StatusCode) {
                         $statusCode = $_.Exception.Response.StatusCode.value__
@@ -324,21 +376,22 @@ param(
                     elseif ($_.Exception.Message -match 'HTTP\s+(\d+)') {
                         $statusCode = [int]$matches[1]
                     }
-                    
+                            
                     # Handle rate limit errors (429 TooManyRequests)
                     if ($statusCode -eq 429 -or $errorMessage -like "*TooManyRequests*" -or $errorMessage -like "*throttled*") {
                         $retryCount++
-                    
+                            
                         if ($retryCount -le $MaxRetries) {
-                            # Get Retry-After header if available, otherwise use exponential backoff
-                            $retryAfter = 30 # Default 30 seconds
+                            # Enhanced exponential backoff with cap
+                            $retryAfter = 60 # Default 60 seconds for rate limits
                             if ($_.Exception.Response.Headers -and $_.Exception.Response.Headers["Retry-After"]) {
                                 $retryAfter = [int]$_.Exception.Response.Headers["Retry-After"]
                             }
                             else {
-                                $retryAfter = [Math]::Pow(2, $retryCount) * 15 # 30s, 60s, 120s, 240s, 480s
+                                # Progressive backoff: 60s, 120s, 240s, 300s (capped at 5 min)
+                                $retryAfter = [Math]::Min([Math]::Pow(2, $retryCount) * 30, 300)
                             }
-                        
+                                
                             Write-Warning "Rate limit hit for device query (Status: $statusCode). Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
                             Start-Sleep -Seconds $retryAfter
                             continue
@@ -348,14 +401,14 @@ param(
                             throw $_
                         }
                     }
-                
+                        
                     # For all other errors, throw immediately
                     Write-Error "API request failed with status $statusCode`: $errorMessage"
                     throw $_
                 }
             } while ($retryCount -le $MaxRetries)
         }
-
+                
         function Get-DeviceDiscoveredApps {
 
             param(
@@ -464,12 +517,28 @@ param(
                 Platform          = $_.platform
             }
         }
-    
-        Write-Host -Message "Found $($dAppresults.Count) apps for device: $deviceName"
+                
         return $dAppresults
     }
+        
+    $results += $batchResults
+    Write-Host "Batch completed. Total records so far: $($results.Count)" -ForegroundColor Green
+        
+    # Add delay between batches to prevent overwhelming the API
+    if ($i + $BatchSize -lt $devices.Count) {
+        Write-Host "Waiting $InterBatchDelay seconds before next batch to respect rate limits..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $InterBatchDelay
+    }
+}
+    
+$totalDevicesScanned = $devices.Count
 
-Write-Host "`nParallel processing completed! Collected data from $($devices.Count) devices." -ForegroundColor Green
+Write-Host "`nData collection completed!" -ForegroundColor Green
+
+# Show performance metrics
+Write-Host "Performance: Used individual device queries with optimized batching and delays" -ForegroundColor Yellow
+
+Write-Host "Total devices scanned: $totalDevicesScanned" -ForegroundColor Green
 Write-Host "Total app records found: $($results.Count)" -ForegroundColor Green
 
 # Calculate and display script execution time
@@ -530,7 +599,8 @@ if ($ExportToCSV) {
             $results | Export-Csv -Path $csvPath -NoTypeInformation
             Write-Host "File saved to: $csvPath" -ForegroundColor Green
             Write-Host "Records exported: $($results.Count)" -ForegroundColor Green
-        } else {
+        }
+        else {
             Write-Host "`nNo results to export to CSV" -ForegroundColor Yellow
         }
     }
