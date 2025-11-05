@@ -33,9 +33,9 @@ param(
     [string]$OutputPath = ""
 )
 
-$appId = "<application-id>"
-$appSecret = "<app-secret>"
-$tenantId = "<tenant-id>"
+$appId = "<YOUR-APP-ID>"
+$appSecret = "<YOUR-APP-SECRET>"
+$tenantId = "<YOUR-TENANT-ID>"
 
 # Obtain an access token using client credentials  
 $body = @{  
@@ -48,11 +48,27 @@ $body = @{
 $response = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Method Post -Body $body -ContentType "application/x-www-form-urlencoded"  
 $token = $response.access_token  
  
-# Retrieve applications  
+# Retrieve applications with pagination support
 $appUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"  
-$applications = Invoke-RestMethod -Uri $appUri -Method Get -Headers @{Authorization = "Bearer $token" }  
- 
-Write-Host "Found $($applications.value.Count) applications to process..." -ForegroundColor Green
+$allApplications = [System.Collections.ArrayList]::new()
+
+Write-Host "Retrieving applications from Intune..." -ForegroundColor Cyan
+
+do {
+    $applications = Invoke-RestMethod -Uri $appUri -Method Get -Headers @{Authorization = "Bearer $token" }  
+    
+    # Add applications to the collection
+    if ($applications.value) {
+        [void]$allApplications.AddRange($applications.value)
+        Write-Host "Retrieved $($applications.value.Count) apps (Total so far: $($allApplications.Count))..." -ForegroundColor Cyan
+    }
+    
+    # Check for next page
+    $appUri = $applications.'@odata.nextLink'
+    
+} while ($null -ne $appUri)
+
+Write-Host "Found $($allApplications.Count) total applications to process..." -ForegroundColor Green
 
 # Use ArrayList for better performance than array concatenation
 $output = [System.Collections.ArrayList]::new()
@@ -146,11 +162,11 @@ $processAppScriptBlock = {
 
 # Process applications in parallel batches
 $appBatches = @()
-for ($i = 0; $i -lt $applications.value.Count; $i += $BatchSize) {
-    $appBatches += , @($applications.value[$i..([math]::Min($i + $BatchSize - 1, $applications.value.Count - 1))])
+for ($i = 0; $i -lt $allApplications.Count; $i += $BatchSize) {
+    $appBatches += , @($allApplications[$i..([math]::Min($i + $BatchSize - 1, $allApplications.Count - 1))])
 }
 
-Write-Host "Processing $($applications.value.Count) apps in $($appBatches.Count) batches of up to $BatchSize apps each..." -ForegroundColor Cyan
+Write-Host "Processing $($allApplications.Count) apps in $($appBatches.Count) batches of up to $BatchSize apps each..." -ForegroundColor Cyan
 
 foreach ($batch in $appBatches) {
     Write-Host "Processing batch with $($batch.Count) apps..." -ForegroundColor Cyan
@@ -176,7 +192,7 @@ foreach ($batch in $appBatches) {
         }
         Remove-Job -Job $_
         $processedCount++
-        Write-Progress -Activity "Processing Applications" -Status "$processedCount of $($applications.value.Count) completed" -PercentComplete (($processedCount / $applications.value.Count) * 100)
+        Write-Progress -Activity "Processing Applications" -Status "$processedCount of $($allApplications.Count) completed" -PercentComplete (($processedCount / $allApplications.Count) * 100)
     }
     
     # Small delay between batches to be extra careful with rate limiting
@@ -187,7 +203,7 @@ foreach ($batch in $appBatches) {
  
 # Output results
 Write-Host "`nProcessing complete!" -ForegroundColor Green
-Write-Host "Total applications processed: $($applications.value.Count)" -ForegroundColor Cyan
+Write-Host "Total applications processed: $($allApplications.Count)" -ForegroundColor Cyan
 Write-Host "Total installations found: $($output.Count)" -ForegroundColor Cyan
 
 # Generate timestamped filename
