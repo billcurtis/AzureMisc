@@ -33,9 +33,9 @@ param(
     [string]$OutputPath = ""
 )
 
-$appId = "<YOUR-APP-ID>"
-$appSecret = "<YOUR-APP-SECRET>"
-$tenantId = "<YOUR-TENANT-ID>"
+$appId = "<Your-App-Id>"
+$appSecret = "<Your-App-Secret>"
+$tenantId = "<Your-Tenant-Id>"
 
 # Obtain an access token using client credentials  
 $body = @{  
@@ -122,24 +122,16 @@ $processAppScriptBlock = {
           
         # Check if Values contain data  
         if ($response.Values) {  
-            foreach ($value in $response.Values) {  
-                # Split the concatenated string to extract the relevant fields  
-                $fields = $value -split ' '  
-     
-                # Assuming the format is consistent, map the fields based on select order
+            foreach ($value in $response.Values) {       
+
                 $outputObject = [PSCustomObject]@{  
-                    ApplicationName    = $ApplicationName  
-                    ComputerName       = if ($fields.Count -gt 1) { $fields[1] } else { "Unknown" }    # DeviceName
-                    UserUPN            = if ($fields.Count -gt 2) { $fields[2] } else { "Unknown" }    # UserPrincipalName  
-                    DeviceId           = if ($fields.Count -gt 3) { $fields[3] } else { "Unknown" }    # DeviceId
-                    Platform           = if ($fields.Count -gt 4) { $fields[4] } else { "Unknown" }    # Platform
-                    AppVersion         = if ($fields.Count -gt 5) { $fields[5] } else { "Unknown" }    # AppVersion
-                    ApplicationId      = if ($fields.Count -gt 6) { $fields[6] } else { "Unknown" }    # ApplicationId
-                    InstallState       = if ($fields.Count -gt 7) { $fields[7] } else { "Unknown" }    # InstallState
-                    AppInstallState    = if ($fields.Count -gt 8) { $fields[8] } else { "Unknown" }    # AppInstallState
-                    InstallStateDetail = if ($fields.Count -gt 9) { $fields[9] } else { "Unknown" }    # InstallStateDetail
-                    Username           = if ($fields.Count -gt 10) { $fields[10] } else { "Unknown" }  # Username
-                    UserID             = if ($fields.Count -gt 11) { $fields[11] } else { "Unknown" }  # UserID
+                    ApplicationName = $ApplicationName  
+                    ComputerName    = if ($value[5]) { $value[5] } else { "Unknown" }    # DeviceName
+                    UserUPN         = if ($value[10]) { $value[10] } else { "Unknown" }  # UserPrincipalName  
+                    DeviceId        = if ($value[4]) { $value[4] } else { "Unknown" }    # DeviceId
+                    Platform        = if ($value[8]) { $value[8] } else { "Unknown" }    # Platform
+                    AppVersion      = if ($value[3]) { $value[3] } else { "Unknown" }    # AppVersion
+                    InstallState    = if ($value[1]) { $value[1] } else { "Unknown" }    # InstallState
                 }  
                 [void]$appResults.Add($outputObject)
             }
@@ -236,5 +228,6 @@ $output | Format-Table -AutoSize
 $output.Count
 
 # Export to CSV  
-$output | Export-Csv -Path $csvPath -NoTypeInformation
+$output | Select-Object ApplicationName, AppVersion, InstallState, ComputerName, UserUPN, DeviceId, Platform| Export-Csv -Path $csvPath -NoTypeInformation 
 Write-Host "Data exported to: $csvPath" -ForegroundColor Green  
+Write-Host "Total installations exported: $($output.Count)" -ForegroundColor Green

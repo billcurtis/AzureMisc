@@ -94,9 +94,9 @@ param(
 
 # Hardcoded credentials for Microsoft Graph API authentication
 
-$clientId = "<YOUR_CLIENT_ID"
-$clientSecret = "<YOUR_CLIENT_SECRET>"
-$tenantId = "<YOUR_TENANT_ID>"
+$clientId = "<Your-Client-Id>"
+$clientSecret = "<Your-Client-Secret>"
+$tenantId = "<Your-Tenant-Id>"
 
 # Start timing the script execution
 $startTime = Get-Date
@@ -193,9 +193,28 @@ function Invoke-GraphRequestWithRetry {
         }
         catch {
             $retryCount++
+            $statusCode = $null
+            $errorMessage = $_.Exception.Message
+            
+            # Try to get status code from different possible locations
+            if ($_.Exception.Response.StatusCode) {
+                $statusCode = $_.Exception.Response.StatusCode.value__
+            }
+            elseif ($_.Exception.Message -match 'HTTP\s+(\d+)') {
+                $statusCode = [int]$matches[1]
+            }
+            elseif ($errorMessage -match '(\d{3})') {
+                $statusCode = [int]$matches[1]
+            }
+            
+            # Handle 404 Not Found errors (device no longer exists or is inaccessible)
+            if ($statusCode -eq 404) {
+                Write-Warning "Resource not found (404) for URI: $Uri - Device may have been deleted or is inaccessible"
+                return $null  # Return null to allow script to continue
+            }
                 
             # Handle authentication errors (401 Unauthorized)
-            if ($_.Exception.Response.StatusCode -eq 401) {
+            if ($statusCode -eq 401) {
                 if ($retryCount -le $MaxRetries) {
                     Write-Warning "Authentication failed, refreshing token and retrying... (Attempt $retryCount/$MaxRetries)"
                     # Force token refresh by clearing current token
@@ -376,6 +395,15 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                     elseif ($_.Exception.Message -match 'HTTP\s+(\d+)') {
                         $statusCode = [int]$matches[1]
                     }
+                    elseif ($errorMessage -match '(\d{3})') {
+                        $statusCode = [int]$matches[1]
+                    }
+                    
+                    # Handle 404 Not Found errors (device no longer exists or is inaccessible)
+                    if ($statusCode -eq 404) {
+                        Write-Warning "Resource not found (404) for URI: $Uri - Device may have been deleted or is inaccessible"
+                        return $null  # Return null to allow script to continue
+                    }
                             
                     # Handle rate limit errors (429 TooManyRequests)
                     if ($statusCode -eq 429 -or $errorMessage -like "*TooManyRequests*" -or $errorMessage -like "*throttled*") {
@@ -425,6 +453,12 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                     Authorization = "Bearer $accessToken"
                 }
                 $response = Invoke-GraphRequestWithRetry -Uri $uri -Headers $headers
+                
+                # Check if response is null (404 error was handled)
+                if ($null -eq $response) {
+                    Write-Warning "Device $DeviceName (ID: $DeviceId) not found - skipping"
+                    return @()
+                }
         
                 if ($response.detectedApps) {
                     return $response.detectedApps
@@ -438,7 +472,16 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                 $apps = @()
                 do {
                     $response = Invoke-GraphRequestWithRetry -Uri $uri -Headers $headers
-                    $apps += $response.value
+                    
+                    # Check if response is null (404 error was handled)
+                    if ($null -eq $response) {
+                        Write-Warning "DetectedApps not found for device $DeviceName (ID: $DeviceId) - skipping"
+                        break
+                    }
+                    
+                    if ($response.value) {
+                        $apps += $response.value
+                    }
                     $uri = $response.'@odata.nextLink'
                 } while ($uri)
         
@@ -447,7 +490,6 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
             catch {
                 # If detectedApps fails, try alternative approach with installed apps
                 try {
-                    Write-Error $_
                     Write-Warning "DetectedApps not available for $DeviceName, trying alternative method..."
                     $accessToken = $using:accessToken
                     $headers = @{
@@ -456,6 +498,12 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                     # Try getting apps through assignments
                     $uri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices('$DeviceId')?`$select=id,deviceName,userId&`$expand=users(`$select=id)"
                     $deviceInfo = Invoke-GraphRequestWithRetry -Uri $uri -Headers $headers
+                    
+                    # Check if deviceInfo is null (404 error)
+                    if ($null -eq $deviceInfo) {
+                        Write-Warning "Device $DeviceName (ID: $DeviceId) not found in alternative method - skipping"
+                        return @()
+                    }
             
                     # Get app install status for this device
                     $uri = "https://graph.microsoft.com/beta/deviceManagement/reports/getDeviceInstallStatusReport"
@@ -467,6 +515,12 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                     } | ConvertTo-Json
             
                     $response = Invoke-GraphRequestWithRetry -Uri $uri -Headers $headers -Method "POST" -Body $body
+                    
+                    # Check if response is null
+                    if ($null -eq $response) {
+                        Write-Warning "Install status report not available for device $DeviceName - skipping"
+                        return @()
+                    }
             
                     if ($response.values) {
                         $apps = @()
