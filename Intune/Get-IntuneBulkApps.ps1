@@ -33,24 +33,62 @@ param(
     [string]$OutputPath = ""
 )
 
-$appId = "<Your-App-Id>"
-$appSecret = "<Your-App-Secret>"
-$tenantId = "<Your-Tenant-Id>"
+$appId = "<YOUR-APP-ID-HERE>"
+$appSecret = "<YOUR-APP-SECRET-HERE>"
+$tenantId = "<YOUR-TENANT-ID-HERE>"
 
-# Obtain an access token using client credentials  
-$body = @{  
-    grant_type    = "client_credentials"  
-    scope         = "https://graph.microsoft.com/.default"  
-    client_id     = $appId  
-    client_secret = $appSecret  
-}  
- 
-$response = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Method Post -Body $body -ContentType "application/x-www-form-urlencoded"  
-$token = $response.access_token  
+
+# Function to obtain an access token using client credentials
+function Get-GraphToken {
+    param(
+        [string]$AppId,
+        [string]$AppSecret,
+        [string]$TenantId
+    )
+    
+    $body = @{  
+        grant_type    = "client_credentials"  
+        scope         = "https://graph.microsoft.com/.default"  
+        client_id     = $AppId  
+        client_secret = $AppSecret  
+    }  
+     
+    try {
+        $response = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token" -Method Post -Body $body -ContentType "application/x-www-form-urlencoded"  
+        
+        # Return token and calculate expiration time (tokens typically valid for 3599 seconds)
+        $expiresIn = if ($response.expires_in) { $response.expires_in } else { 3599 }
+        
+        return @{
+            Token = $response.access_token
+            ExpiresAt = (Get-Date).AddSeconds($expiresIn - 300)  # Refresh 5 minutes before expiry
+        }
+    }
+    catch {
+        Write-Error "Failed to obtain access token: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Obtain initial access token
+$tokenInfo = Get-GraphToken -AppId $appId -AppSecret $appSecret -TenantId $tenantId
+$token = $tokenInfo.Token
+$tokenExpiresAt = $tokenInfo.ExpiresAt
+
+Write-Host "Token obtained, expires at: $tokenExpiresAt" -ForegroundColor Cyan  
  
 # Retrieve applications with pagination support
 $appUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"  
 $allApplications = [System.Collections.ArrayList]::new()
+
+# Check if token needs refresh before starting
+if ((Get-Date) -ge $tokenExpiresAt) {
+    Write-Host "Token expired or expiring soon, refreshing..." -ForegroundColor Yellow
+    $tokenInfo = Get-GraphToken -AppId $appId -AppSecret $appSecret -TenantId $tenantId
+    $token = $tokenInfo.Token
+    $tokenExpiresAt = $tokenInfo.ExpiresAt
+    Write-Host "Token refreshed, new expiration: $tokenExpiresAt" -ForegroundColor Green
+}
 
 Write-Host "Retrieving applications from Intune..." -ForegroundColor Cyan
 
@@ -65,6 +103,15 @@ do {
     
     # Check for next page
     $appUri = $applications.'@odata.nextLink'
+    
+    # Check if token needs refresh before next page
+    if ($null -ne $appUri -and (Get-Date) -ge $tokenExpiresAt) {
+        Write-Host "Token expiring soon, refreshing..." -ForegroundColor Yellow
+        $tokenInfo = Get-GraphToken -AppId $appId -AppSecret $appSecret -TenantId $tenantId
+        $token = $tokenInfo.Token
+        $tokenExpiresAt = $tokenInfo.ExpiresAt
+        Write-Host "Token refreshed, new expiration: $tokenExpiresAt" -ForegroundColor Green
+    }
     
 } while ($null -ne $appUri)
 
@@ -161,6 +208,15 @@ for ($i = 0; $i -lt $allApplications.Count; $i += $BatchSize) {
 Write-Host "Processing $($allApplications.Count) apps in $($appBatches.Count) batches of up to $BatchSize apps each..." -ForegroundColor Cyan
 
 foreach ($batch in $appBatches) {
+    # Check if token needs refresh before processing batch
+    if ((Get-Date) -ge $tokenExpiresAt) {
+        Write-Host "Token expiring soon, refreshing before batch..." -ForegroundColor Yellow
+        $tokenInfo = Get-GraphToken -AppId $appId -AppSecret $appSecret -TenantId $tenantId
+        $token = $tokenInfo.Token
+        $tokenExpiresAt = $tokenInfo.ExpiresAt
+        Write-Host "Token refreshed, new expiration: $tokenExpiresAt" -ForegroundColor Green
+    }
+    
     Write-Host "Processing batch with $($batch.Count) apps..." -ForegroundColor Cyan
     
     # Process current batch in parallel
