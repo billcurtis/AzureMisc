@@ -26,6 +26,14 @@
     Return only the top N results. Default is all results.
 
 .EXAMPLE
+    .\Get-WindowsFirewallLogs.ps1 -EnableLogging
+    Enables Windows Firewall logging for all profiles (requires administrator privileges).
+
+.EXAMPLE
+    .\Get-WindowsFirewallLogs.ps1 -DisableLogging
+    Disables Windows Firewall logging for all profiles (requires administrator privileges).
+
+.EXAMPLE
     .\Get-WindowsFirewallLogs.ps1
     Collects all firewall log entries.
 
@@ -41,7 +49,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [string]$LogPath = "$env:SystemRoot\System32\LogFiles\Firewall\pfirewall.log",
+    [string]$LogPath,
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('All', 'Denied', 'Accepted')]
@@ -57,8 +65,118 @@ param(
     [string]$ExportPath,
 
     [Parameter(Mandatory = $false)]
-    [int]$Top
+    [int]$Top,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$EnableLogging,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$DisableLogging
 )
+
+function Disable-FirewallLogging {
+    <#
+    .SYNOPSIS
+        Disables Windows Firewall logging for all profiles.
+    #>
+    
+    Write-Host "`nDisabling Windows Firewall logging..." -ForegroundColor Yellow
+    
+    try {
+        # Check if running as administrator
+        $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+        $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        
+        if (-not $isAdmin) {
+            Write-Error "Administrator privileges required to disable firewall logging."
+            Write-Warning "Please run this script as Administrator with the -DisableLogging switch."
+            return $false
+        }
+        
+        # Disable logging for all profiles
+        $profiles = @('Domain', 'Private', 'Public')
+        foreach ($profile in $profiles) {
+            Write-Verbose "Disabling logging for $profile profile..."
+            Set-NetFirewallProfile -Profile $profile -LogAllowed False -LogBlocked False -ErrorAction Stop
+        }
+        
+        Write-Host "Firewall logging disabled successfully for all profiles." -ForegroundColor Green
+        
+        return $true
+        
+    } catch {
+        Write-Error "Failed to disable firewall logging: $_"
+        return $false
+    }
+}
+
+function Enable-FirewallLogging {
+    <#
+    .SYNOPSIS
+        Enables Windows Firewall logging for all profiles.
+    #>
+    
+    Write-Host "`nEnabling Windows Firewall logging..." -ForegroundColor Yellow
+    
+    try {
+        # Check if running as administrator
+        $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+        $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        
+        if (-not $isAdmin) {
+            Write-Error "Administrator privileges required to enable firewall logging."
+            Write-Warning "Please run this script as Administrator with the -EnableLogging switch."
+            return $false
+        }
+        
+        # Enable logging for all profiles
+        $profiles = @('Domain', 'Private', 'Public')
+        foreach ($profile in $profiles) {
+            Write-Verbose "Enabling logging for $profile profile..."
+            Set-NetFirewallProfile -Profile $profile -LogAllowed True -LogBlocked True -LogMaxSizeKilobytes 4096 -ErrorAction Stop
+        }
+        
+        Write-Host "Firewall logging enabled successfully for all profiles." -ForegroundColor Green
+        Write-Host "Log file location: $(Get-NetFirewallProfile -Profile Domain | Select-Object -ExpandProperty LogFileName)" -ForegroundColor Green
+        Write-Warning "Note: It may take a few moments for log entries to appear."
+        
+        return $true
+        
+    } catch {
+        Write-Error "Failed to enable firewall logging: $_"
+        return $false
+    }
+}
+
+function Get-FirewallLogPath {
+    <#
+    .SYNOPSIS
+        Gets the configured firewall log path from the active profile.
+    #>
+    
+    try {
+        # Try to get log path from Domain profile first, then Private, then Public
+        $profiles = @('Domain', 'Private', 'Public')
+        foreach ($profile in $profiles) {
+            $logFile = Get-NetFirewallProfile -Profile $profile -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LogFileName
+            if ($logFile -and (Test-Path -Path $logFile)) {
+                return $logFile
+            }
+        }
+        
+        # If no existing log found, return the first configured path
+        $logFile = Get-NetFirewallProfile -Profile Domain -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LogFileName
+        if ($logFile) {
+            return $logFile
+        }
+        
+        # Fallback to default location
+        return "$env:SystemRoot\System32\LogFiles\Firewall\pfirewall.log"
+        
+    } catch {
+        return "$env:SystemRoot\System32\LogFiles\Firewall\pfirewall.log"
+    }
+}
 
 function Get-FirewallLogEntries {
     param(
@@ -67,13 +185,22 @@ function Get-FirewallLogEntries {
 
     # Check if log file exists
     if (-not (Test-Path -Path $Path)) {
-        Write-Error "Firewall log file not found at: $Path"
-        Write-Warning "To enable Windows Firewall logging:"
-        Write-Warning "1. Open Windows Defender Firewall with Advanced Security"
-        Write-Warning "2. Right-click 'Windows Defender Firewall with Advanced Security' and select Properties"
-        Write-Warning "3. For each profile (Domain, Private, Public), go to the profile tab"
-        Write-Warning "4. Click 'Customize' in the Logging section"
-        Write-Warning "5. Set 'Log dropped packets' and/or 'Log successful connections' to 'Yes'"
+        Write-Warning "Firewall log file not found at: $Path"
+        
+        # Check if logging is enabled
+        $profiles = Get-NetFirewallProfile -ErrorAction SilentlyContinue
+        $loggingEnabled = $profiles | Where-Object { $_.LogAllowed -eq $true -or $_.LogBlocked -eq $true }
+        
+        if (-not $loggingEnabled) {
+            Write-Warning "Windows Firewall logging is not enabled."
+            Write-Host "`nTo enable logging, run this script with the -EnableLogging switch:" -ForegroundColor Cyan
+            Write-Host "  .\Get-WindowsFirewallLogs.ps1 -EnableLogging" -ForegroundColor Cyan
+            Write-Host "`nOr enable manually:" -ForegroundColor Yellow
+            Write-Host "  Set-NetFirewallProfile -Profile Domain,Private,Public -LogAllowed True -LogBlocked True" -ForegroundColor Yellow
+        } else {
+            Write-Warning "Logging is enabled but no log entries exist yet. Generate some network traffic and try again."
+        }
+        
         return $null
     }
 
@@ -150,7 +277,40 @@ function Get-FirewallLogEntries {
 }
 
 # Main script execution
+
+# Handle mutually exclusive switches
+if ($EnableLogging -and $DisableLogging) {
+    Write-Error "Cannot use both -EnableLogging and -DisableLogging switches at the same time."
+    exit 1
+}
+
+# Handle EnableLogging switch
+if ($EnableLogging) {
+    $enabled = Enable-FirewallLogging
+    if (-not $enabled) {
+        exit 1
+    }
+    Write-Host "\nWaiting for log entries to be generated..." -ForegroundColor Yellow
+    Write-Host "Generate some network traffic and run the script again without -EnableLogging to view logs.\n" -ForegroundColor Yellow
+    exit 0
+}
+
+# Handle DisableLogging switch
+if ($DisableLogging) {
+    $disabled = Disable-FirewallLogging
+    if (-not $disabled) {
+        exit 1
+    }
+    exit 0
+}
+
 Write-Host "Collecting Windows Firewall logs..." -ForegroundColor Cyan
+
+# Determine log path
+if (-not $LogPath) {
+    $LogPath = Get-FirewallLogPath
+    Write-Verbose "Using log path: $LogPath"
+}
 
 # Get firewall log entries
 $logEntries = Get-FirewallLogEntries -Path $LogPath
