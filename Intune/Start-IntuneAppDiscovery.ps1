@@ -94,9 +94,10 @@ param(
 
 # Hardcoded credentials for Microsoft Graph API authentication
 
-$clientId = "<Your-Client-Id>"
-$clientSecret = "<Your-Client-Secret>"
-$tenantId = "<Your-Tenant-Id>"
+$clientId = "<YOUR_CLIENT_ID_HERE>"
+$clientSecret = "<YOUR_CLIENT_SECRET_HERE>"
+$tenantId = "<YOUR_TENANT_ID_HERE>"
+
 
 # Start timing the script execution
 $startTime = Get-Date
@@ -358,6 +359,29 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
     
         
         #functions
+        function Get-FreshToken {
+            $clientId = $using:clientId
+            $clientSecret = $using:clientSecret
+            $tenantId = $using:tenantId
+            
+            $body = @{
+                "grant_type"    = "client_credentials"
+                "client_id"     = $clientId
+                "client_secret" = $clientSecret
+                "scope"         = "https://graph.microsoft.com/.default"
+            }
+            $uri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+                
+            try {
+                $response = Invoke-RestMethod -Uri $uri -Method Post -Body $body
+                return $response.access_token
+            }
+            catch {
+                Write-Error "Failed to acquire authentication token in parallel thread: $_"
+                throw
+            }
+        }
+        
         function Invoke-GraphRequestWithRetry {
             param(
                 [string]$Uri,
@@ -385,6 +409,7 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                     return Invoke-RestMethod @params
                 }
                 catch {
+                    $retryCount++
                     $statusCode = $null
                     $errorMessage = $_.Exception.Message
                             
@@ -404,11 +429,21 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                         Write-Warning "Resource not found (404) for URI: $Uri - Device may have been deleted or is inaccessible"
                         return $null  # Return null to allow script to continue
                     }
+                    
+                    # Handle authentication errors (401 Unauthorized)
+                    if ($statusCode -eq 401) {
+                        if ($retryCount -le $MaxRetries) {
+                            Write-Warning "Authentication failed (401), refreshing token and retrying... (Attempt $retryCount/$MaxRetries)"
+                            # Get a fresh token
+                            $freshToken = Get-FreshToken
+                            $Headers["Authorization"] = "Bearer $freshToken"
+                            Start-Sleep -Seconds 2
+                            continue
+                        }
+                    }
                             
                     # Handle rate limit errors (429 TooManyRequests)
                     if ($statusCode -eq 429 -or $errorMessage -like "*TooManyRequests*" -or $errorMessage -like "*throttled*") {
-                        $retryCount++
-                            
                         if ($retryCount -le $MaxRetries) {
                             # Enhanced exponential backoff with cap
                             $retryAfter = 60 # Default 60 seconds for rate limits
