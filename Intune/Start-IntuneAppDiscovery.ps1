@@ -372,14 +372,29 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
             }
             $uri = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
                 
-            try {
-                $response = Invoke-RestMethod -Uri $uri -Method Post -Body $body
-                return $response.access_token
-            }
-            catch {
-                Write-Error "Failed to acquire authentication token in parallel thread: $_"
-                throw
-            }
+            $maxRetries = 3
+            $retryCount = 0
+            
+            do {
+                try {
+                    $response = Invoke-RestMethod -Uri $uri -Method Post -Body $body -TimeoutSec 30
+                    return $response.access_token
+                }
+                catch {
+                    $retryCount++
+                    $errorMessage = $_.Exception.Message
+                    
+                    if ($retryCount -le $maxRetries) {
+                        $waitTime = [Math]::Pow(2, $retryCount) * 2  # 4s, 8s, 16s
+                        Write-Warning "Failed to acquire token (attempt $retryCount/$maxRetries): $errorMessage. Retrying in $waitTime seconds..."
+                        Start-Sleep -Seconds $waitTime
+                    }
+                    else {
+                        Write-Error "Failed to acquire authentication token after $maxRetries retries: $errorMessage"
+                        throw
+                    }
+                }
+            } while ($retryCount -le $maxRetries)
         }
         
         function Invoke-GraphRequestWithRetry {
@@ -483,7 +498,8 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
             try {
                 # Try beta endpoint with detectedApps
                 $uri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices('$DeviceId')?`$expand=detectedApps"
-                $accessToken = $using:accessToken
+                # Get a fresh token for this request
+                $accessToken = Get-FreshToken
                 $headers = @{
                     Authorization = "Bearer $accessToken"
                 }
@@ -506,6 +522,9 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
         
                 $apps = @()
                 do {
+                    # Refresh token and headers for pagination
+                    $accessToken = Get-FreshToken
+                    $headers["Authorization"] = "Bearer $accessToken"
                     $response = Invoke-GraphRequestWithRetry -Uri $uri -Headers $headers
                     
                     # Check if response is null (404 error was handled)
@@ -519,14 +538,15 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                     }
                     $uri = $response.'@odata.nextLink'
                 } while ($uri)
-        
+                
                 return $apps
             }
             catch {
                 # If detectedApps fails, try alternative approach with installed apps
                 try {
                     Write-Warning "DetectedApps not available for $DeviceName, trying alternative method..."
-                    $accessToken = $using:accessToken
+                    # Get a fresh token for alternative method
+                    $accessToken = Get-FreshToken
                     $headers = @{
                         Authorization = "Bearer $accessToken"
                     }
@@ -539,7 +559,6 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                         Write-Warning "Device $DeviceName (ID: $DeviceId) not found in alternative method - skipping"
                         return @()
                     }
-            
                     # Get app install status for this device
                     $uri = "https://graph.microsoft.com/beta/deviceManagement/reports/getDeviceInstallStatusReport"
                     $body = @{
@@ -549,6 +568,9 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                         top    = 1000
                     } | ConvertTo-Json
             
+                    # Refresh token before POST request
+                    $accessToken = Get-FreshToken
+                    $headers["Authorization"] = "Bearer $accessToken"
                     $response = Invoke-GraphRequestWithRetry -Uri $uri -Headers $headers -Method "POST" -Body $body
                     
                     # Check if response is null
