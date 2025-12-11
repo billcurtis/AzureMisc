@@ -169,7 +169,8 @@ function Invoke-GraphRequestWithRetry {
         [string]$Method = "GET",
         [object]$Body = $null,
         [string]$ContentType = "application/json",
-        [int]$MaxRetries = 3
+        [int]$MaxRetries = 3,
+        [int]$TimeoutSec = 120
     )
     
     $retryCount = 0
@@ -180,9 +181,10 @@ function Invoke-GraphRequestWithRetry {
             $Headers["Authorization"] = "Bearer $validToken"
                 
             $params = @{
-                Uri     = $Uri
-                Headers = $Headers
-                Method  = $Method
+                Uri        = $Uri
+                Headers    = $Headers
+                Method     = $Method
+                TimeoutSec = $TimeoutSec
             }
             
             if ($Body) {
@@ -222,6 +224,31 @@ function Invoke-GraphRequestWithRetry {
                     $Global:CurrentToken = $null
                     $Global:TokenExpiration = $null
                     Start-Sleep -Seconds 2
+                    continue
+                }
+            }
+            
+            # Handle Gateway Timeout errors (504)
+            if ($statusCode -eq 504 -or $errorMessage -like "*Gateway Timeout*" -or $errorMessage -like "*504*") {
+                if ($retryCount -le $MaxRetries) {
+                    # Progressive backoff for gateway timeouts: 30s, 60s, 120s
+                    $retryAfter = [Math]::Min([Math]::Pow(2, $retryCount) * 15, 120)
+                    Write-Warning "Gateway timeout (504) encountered. Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
+                    Start-Sleep -Seconds $retryAfter
+                    continue
+                }
+                else {
+                    Write-Warning "Max retries exceeded for gateway timeout on URI: $Uri - Skipping this request"
+                    return $null  # Return null to allow script to continue
+                }
+            }
+            
+            # Handle Service Unavailable errors (503)
+            if ($statusCode -eq 503 -or $errorMessage -like "*Service Unavailable*") {
+                if ($retryCount -le $MaxRetries) {
+                    $retryAfter = [Math]::Min([Math]::Pow(2, $retryCount) * 15, 120)
+                    Write-Warning "Service unavailable (503). Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
+                    Start-Sleep -Seconds $retryAfter
                     continue
                 }
             }
@@ -404,16 +431,18 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                 [string]$Method = "GET",
                 [object]$Body = $null,
                 [string]$ContentType = "application/json",
-                [int]$MaxRetries = 5
+                [int]$MaxRetries = 5,
+                [int]$TimeoutSec = 120
             )
                 
             $retryCount = 0
             do {
                 try {
                     $params = @{
-                        Uri     = $Uri
-                        Headers = $Headers
-                        Method  = $Method
+                        Uri        = $Uri
+                        Headers    = $Headers
+                        Method     = $Method
+                        TimeoutSec = $TimeoutSec
                     }
                         
                     if ($Body) {
@@ -453,6 +482,31 @@ for ($i = 0; $i -lt $devices.Count; $i += $BatchSize) {
                             $freshToken = Get-FreshToken
                             $Headers["Authorization"] = "Bearer $freshToken"
                             Start-Sleep -Seconds 2
+                            continue
+                        }
+                    }
+                    
+                    # Handle Gateway Timeout errors (504)
+                    if ($statusCode -eq 504 -or $errorMessage -like "*Gateway Timeout*" -or $errorMessage -like "*504*") {
+                        if ($retryCount -le $MaxRetries) {
+                            # Progressive backoff for gateway timeouts: 30s, 60s, 120s, 240s
+                            $retryAfter = [Math]::Min([Math]::Pow(2, $retryCount) * 15, 240)
+                            Write-Warning "Gateway timeout (504) for device query. Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
+                            Start-Sleep -Seconds $retryAfter
+                            continue
+                        }
+                        else {
+                            Write-Warning "Max retries exceeded for gateway timeout on URI: $Uri - Skipping this request"
+                            return $null  # Return null to allow script to continue
+                        }
+                    }
+                    
+                    # Handle Service Unavailable errors (503)
+                    if ($statusCode -eq 503 -or $errorMessage -like "*Service Unavailable*") {
+                        if ($retryCount -le $MaxRetries) {
+                            $retryAfter = [Math]::Min([Math]::Pow(2, $retryCount) * 15, 240)
+                            Write-Warning "Service unavailable (503). Waiting $retryAfter seconds before retry $retryCount/$MaxRetries..."
+                            Start-Sleep -Seconds $retryAfter
                             continue
                         }
                     }
