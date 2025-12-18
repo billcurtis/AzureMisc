@@ -20,7 +20,7 @@
 # Hardcoded configuration variables
 $CollectorName = "ProcessResourceMonitor"
 $OutputPath = "C:\Temp"
-$SampleInterval = 10
+$SampleInterval = 5
 $AutoStart = $true
 $Remove = $false  # Set to $true to remove the collector and scheduled task (leaves data intact)
 
