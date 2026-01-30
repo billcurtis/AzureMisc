@@ -331,7 +331,11 @@ function Get-NATGatewayDataProcessed {
 function Get-NATGatewayBytesMetrics {
     <#
     .SYNOPSIS
-        Gets detailed byte metrics (SNAT and Total) for a NAT Gateway.
+        Gets detailed byte metrics (Inbound, Outbound, SNAT) for a NAT Gateway.
+    .DESCRIPTION
+        Uses the ByteCount metric with Direction dimension to get inbound/outbound traffic separately.
+        Uses REST API with dimension filter since Get-AzMetric doesn't support dimension filtering properly.
+        Reference: https://learn.microsoft.com/en-us/azure/nat-gateway/nat-metrics
     #>
     param(
         [Parameter(Mandatory)]
@@ -346,22 +350,85 @@ function Get-NATGatewayBytesMetrics {
 
     $result = @{
         TotalBytesGB = 0
+        InboundBytesGB = 0
+        OutboundBytesGB = 0
         SNATConnectionCount = 0
         DroppedPackets = 0
     }
 
-    # Known NAT Gateway metrics - query directly without using deprecated Get-AzMetricDefinition
-    # Reference: https://learn.microsoft.com/en-us/azure/nat-gateway/nat-metrics
-    $natGatewayMetrics = @(
-        @{ Name = "ByteCount"; Property = "TotalBytesGB"; Aggregation = "Total"; Divisor = 1GB },
-        @{ Name = "PacketCount"; Property = "PacketCount"; Aggregation = "Total"; Divisor = 1 },
-        @{ Name = "SNATConnectionCount"; Property = "SNATConnectionCount"; Aggregation = "Total"; Divisor = 1 },
-        @{ Name = "TotalConnectionCount"; Property = "TotalConnectionCount"; Aggregation = "Total"; Divisor = 1 },
-        @{ Name = "DroppedPackets"; Property = "DroppedPackets"; Aggregation = "Total"; Divisor = 1 },
-        @{ Name = "DatapathAvailability"; Property = "DatapathAvailability"; Aggregation = "Average"; Divisor = 1 }
+    # Get ByteCount with Direction dimension to split Inbound/Outbound
+    # Must use REST API with $filter=Direction eq '*' to get the dimension split
+    try {
+        $startTimeStr = $StartTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        $endTimeStr = $EndTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        $filter = [System.Uri]::EscapeDataString("Direction eq '*'")
+        
+        $path = "$ResourceId/providers/microsoft.insights/metrics?api-version=2023-10-01&metricnames=ByteCount&timespan=$startTimeStr/$endTimeStr&interval=P1D&aggregation=Total&`$filter=$filter"
+        
+        $response = Invoke-AzRestMethod -Path $path -Method GET -ErrorAction SilentlyContinue
+        
+        if ($response -and $response.StatusCode -eq 200) {
+            $content = $response.Content | ConvertFrom-Json
+            
+            if ($content.value -and $content.value[0].timeseries) {
+                foreach ($timeseries in $content.value[0].timeseries) {
+                    # Get direction from metadata
+                    $direction = $null
+                    if ($timeseries.metadatavalues) {
+                        $directionMeta = $timeseries.metadatavalues | Where-Object { $_.name.value -eq "Direction" }
+                        if ($directionMeta) {
+                            $direction = $directionMeta.value
+                        }
+                    }
+                    
+                    # Sum all data points in this timeseries
+                    $totalBytes = ($timeseries.data | ForEach-Object { $_.total } | Where-Object { $null -ne $_ } | Measure-Object -Sum).Sum
+                    
+                    if ($null -ne $totalBytes -and $totalBytes -gt 0) {
+                        $gbValue = [math]::Round($totalBytes / 1GB, 2)
+                        
+                        switch ($direction) {
+                            "In"  { $result.InboundBytesGB = $gbValue }
+                            "Out" { $result.OutboundBytesGB = $gbValue }
+                            default { $result.TotalBytesGB = $gbValue }
+                        }
+                    }
+                }
+            }
+        }
+        
+        # Calculate total from inbound + outbound if we got dimension data
+        if ($result.InboundBytesGB -gt 0 -or $result.OutboundBytesGB -gt 0) {
+            $result.TotalBytesGB = [math]::Round($result.InboundBytesGB + $result.OutboundBytesGB, 2)
+        }
+        
+        # Fallback: If no dimension data, try to get total without filter
+        if ($result.TotalBytesGB -eq 0) {
+            $pathNoFilter = "$ResourceId/providers/microsoft.insights/metrics?api-version=2023-10-01&metricnames=ByteCount&timespan=$startTimeStr/$endTimeStr&interval=P1D&aggregation=Total"
+            $responseNoFilter = Invoke-AzRestMethod -Path $pathNoFilter -Method GET -ErrorAction SilentlyContinue
+            
+            if ($responseNoFilter -and $responseNoFilter.StatusCode -eq 200) {
+                $contentNoFilter = $responseNoFilter.Content | ConvertFrom-Json
+                if ($contentNoFilter.value -and $contentNoFilter.value[0].timeseries) {
+                    $totalBytes = ($contentNoFilter.value[0].timeseries[0].data | ForEach-Object { $_.total } | Where-Object { $null -ne $_ } | Measure-Object -Sum).Sum
+                    if ($null -ne $totalBytes -and $totalBytes -gt 0) {
+                        $result.TotalBytesGB = [math]::Round($totalBytes / 1GB, 2)
+                    }
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log "Could not retrieve ByteCount metrics: $_" -Level "WARNING"
+    }
+
+    # Get other metrics (SNAT connections, dropped packets) using standard Get-AzMetric
+    $otherMetrics = @(
+        @{ Name = "SNATConnectionCount"; Property = "SNATConnectionCount"; Aggregation = "Total" },
+        @{ Name = "DroppedPackets"; Property = "DroppedPackets"; Aggregation = "Total" }
     )
 
-    foreach ($metricDef in $natGatewayMetrics) {
+    foreach ($metricDef in $otherMetrics) {
         try {
             $metric = Get-AzMetric -ResourceId $ResourceId `
                 -MetricName $metricDef.Name `
@@ -373,17 +440,13 @@ function Get-NATGatewayBytesMetrics {
                 -ErrorAction SilentlyContinue
 
             if ($metric -and $metric.Data) {
-                $aggregationProperty = $metricDef.Aggregation
-                $values = $metric.Data | ForEach-Object { $_.$aggregationProperty } | Where-Object { $null -ne $_ }
+                $values = $metric.Data | ForEach-Object { $_.Total } | Where-Object { $null -ne $_ }
                 $total = ($values | Measure-Object -Sum).Sum
                 
                 if ($null -ne $total -and $total -gt 0) {
-                    $calculatedValue = $total / $metricDef.Divisor
-                    
                     switch ($metricDef.Property) {
-                        "TotalBytesGB" { $result.TotalBytesGB = [math]::Round($calculatedValue, 2) }
-                        "SNATConnectionCount" { $result.SNATConnectionCount = [math]::Round($calculatedValue, 0) }
-                        "DroppedPackets" { $result.DroppedPackets = [math]::Round($calculatedValue, 0) }
+                        "SNATConnectionCount" { $result.SNATConnectionCount = [math]::Round($total, 0) }
+                        "DroppedPackets" { $result.DroppedPackets = [math]::Round($total, 0) }
                     }
                 }
             }
@@ -968,6 +1031,8 @@ foreach ($natGwDetail in $natGatewayDetails) {
         ResourceGroup = $natGwDetail.ResourceGroup
         SubscriptionName = $natGwDetail.SubscriptionName
         TotalDataProcessedGB = $metrics.TotalBytesGB
+        InboundDataGB = $metrics.InboundBytesGB
+        OutboundDataGB = $metrics.OutboundBytesGB
         SNATConnectionCount = $metrics.SNATConnectionCount
         DroppedPackets = $metrics.DroppedPackets
     }
@@ -1022,7 +1087,9 @@ $metricsTable = $natGatewayMetrics | ForEach-Object {
         "NAT Gateway"         = $_.Name
         "Subscription"        = $_.SubscriptionName
         "Resource Group"      = $_.ResourceGroup
-        "Data Processed (GB)" = $_.TotalDataProcessedGB
+        "Inbound (GB)"        = $_.InboundDataGB
+        "Outbound (GB)"       = $_.OutboundDataGB
+        "Total (GB)"          = $_.TotalDataProcessedGB
         "SNAT Connections"    = $_.SNATConnectionCount
         "Dropped Packets"     = $_.DroppedPackets
     }
@@ -1156,7 +1223,9 @@ foreach ($natGwDetail in $natGatewayDetails) {
         SKU = $natGwDetail.SkuName
         AssociatedPublicIPs = ($natGwDetail.PublicIpAddresses | ForEach-Object { $_.Name }) -join "; "
         AssociatedPublicIPPrefixes = ($natGwDetail.PublicIpPrefixes | ForEach-Object { $_.Name }) -join "; "
-        DataProcessedGB = $metrics.TotalDataProcessedGB
+        InboundDataGB = $metrics.InboundDataGB
+        OutboundDataGB = $metrics.OutboundDataGB
+        TotalDataProcessedGB = $metrics.TotalDataProcessedGB
         SNATConnections = $metrics.SNATConnectionCount
         DroppedPackets = $metrics.DroppedPackets
         NATGatewayCostUSD = [math]::Round($natGwCost, 2)
