@@ -47,6 +47,200 @@
 .EXAMPLE
     .\Get-NATGatewayCosts.ps1 -Days 14 -ResourceGroupName "MyResourceGroup"
     Gets NAT Gateway costs for the last 14 days in the specified resource group.
+
+.EXAMPLE
+    # Get DAILY cost breakdown for NAT Gateways using Cost Management Query API
+    # This queries Azure directly with daily granularity
+    
+    $subscriptionId = (Get-AzContext).Subscription.Id
+    $scope = "/subscriptions/$subscriptionId"
+    $startDate = (Get-Date).AddDays(-7).ToString("yyyy-MM-dd")
+    $endDate = (Get-Date).ToString("yyyy-MM-dd")
+    
+    $dailyCosts = Invoke-AzCostManagementQuery -Scope $scope -Type "ActualCost" `
+        -Timeframe "Custom" `
+        -TimePeriodFrom $startDate `
+        -TimePeriodTo $endDate `
+        -DatasetGranularity "Daily" `
+        -DatasetAggregation @{
+            "TotalCost" = @{ "name" = "Cost"; "function" = "Sum" }
+        } `
+        -DatasetGrouping @(
+            @{ "type" = "Dimension"; "name" = "ResourceId" },
+            @{ "type" = "Dimension"; "name" = "ResourceType" }
+        ) `
+        -DatasetFilter @{
+            "Dimensions" = @{
+                "Name" = "ResourceType"
+                "Operator" = "In"
+                "Values" = @("microsoft.network/natgateways", "microsoft.network/publicipaddresses")
+            }
+        }
+    
+    # Parse and display the daily results
+    $dailyCosts.Row | ForEach-Object {
+        [PSCustomObject]@{
+            Date = $_[1]
+            Cost = [math]::Round($_[0], 4)
+            ResourceId = $_[2]
+            ResourceType = $_[3]
+        }
+    } | Sort-Object Date | Format-Table -AutoSize
+
+.EXAMPLE
+    # Get daily NAT Gateway costs for the last 30 days and export to CSV
+    
+    $subscriptionId = (Get-AzContext).Subscription.Id
+    $scope = "/subscriptions/$subscriptionId"
+    
+    $dailyCosts = Invoke-AzCostManagementQuery -Scope $scope -Type "ActualCost" `
+        -Timeframe "MonthToDate" `
+        -DatasetGranularity "Daily" `
+        -DatasetAggregation @{
+            "TotalCost" = @{ "name" = "Cost"; "function" = "Sum" }
+        } `
+        -DatasetGrouping @(
+            @{ "type" = "Dimension"; "name" = "ResourceId" }
+        ) `
+        -DatasetFilter @{
+            "Dimensions" = @{
+                "Name" = "ResourceType"
+                "Operator" = "In"
+                "Values" = @("microsoft.network/natgateways")
+            }
+        }
+    
+    $results = $dailyCosts.Row | ForEach-Object {
+        [PSCustomObject]@{
+            Date = $_[1]
+            DailyCostUSD = [math]::Round($_[0], 4)
+            NATGatewayName = ($_[2] -split '/')[-1]
+            ResourceId = $_[2]
+        }
+    }
+    
+    $results | Export-Csv -Path "NATGateway_DailyCosts.csv" -NoTypeInformation
+    $results | Format-Table -AutoSize
+
+.EXAMPLE
+    # Get yesterday's NAT Gateway costs only (useful for daily monitoring/alerts)
+    
+    $yesterday = (Get-Date).AddDays(-1).ToString("yyyy-MM-dd")
+    $today = (Get-Date).ToString("yyyy-MM-dd")
+    $subscriptionId = (Get-AzContext).Subscription.Id
+    
+    $yesterdayCosts = Invoke-AzCostManagementQuery `
+        -Scope "/subscriptions/$subscriptionId" `
+        -Type "ActualCost" `
+        -Timeframe "Custom" `
+        -TimePeriodFrom $yesterday `
+        -TimePeriodTo $today `
+        -DatasetGranularity "Daily" `
+        -DatasetAggregation @{
+            "TotalCost" = @{ "name" = "Cost"; "function" = "Sum" }
+        } `
+        -DatasetGrouping @(
+            @{ "type" = "Dimension"; "name" = "ResourceId" }
+        ) `
+        -DatasetFilter @{
+            "Dimensions" = @{
+                "Name" = "ResourceType"
+                "Operator" = "In"
+                "Values" = @("microsoft.network/natgateways")
+            }
+        }
+    
+    $yesterdayCosts.Row | ForEach-Object {
+        Write-Host "NAT Gateway: $(($_[2] -split '/')[-1]) - Cost: `$$([math]::Round($_[0], 2))"
+    }
+
+.EXAMPLE
+    # Compare NAT Gateway costs between two date ranges (e.g., this week vs last week)
+    
+    $subscriptionId = (Get-AzContext).Subscription.Id
+    $scope = "/subscriptions/$subscriptionId"
+    
+    # This week
+    $thisWeekStart = (Get-Date).AddDays(-7).ToString("yyyy-MM-dd")
+    $thisWeekEnd = (Get-Date).ToString("yyyy-MM-dd")
+    
+    # Last week
+    $lastWeekStart = (Get-Date).AddDays(-14).ToString("yyyy-MM-dd")
+    $lastWeekEnd = (Get-Date).AddDays(-7).ToString("yyyy-MM-dd")
+    
+    $queryParams = @{
+        Type = "ActualCost"
+        DatasetGranularity = "None"
+        DatasetAggregation = @{ "TotalCost" = @{ "name" = "Cost"; "function" = "Sum" } }
+        DatasetFilter = @{
+            "Dimensions" = @{
+                "Name" = "ResourceType"
+                "Operator" = "In"
+                "Values" = @("microsoft.network/natgateways")
+            }
+        }
+    }
+    
+    $thisWeekCost = (Invoke-AzCostManagementQuery -Scope $scope @queryParams `
+        -Timeframe "Custom" -TimePeriodFrom $thisWeekStart -TimePeriodTo $thisWeekEnd).Row[0][0]
+    
+    $lastWeekCost = (Invoke-AzCostManagementQuery -Scope $scope @queryParams `
+        -Timeframe "Custom" -TimePeriodFrom $lastWeekStart -TimePeriodTo $lastWeekEnd).Row[0][0]
+    
+    $percentChange = if ($lastWeekCost -gt 0) { 
+        [math]::Round((($thisWeekCost - $lastWeekCost) / $lastWeekCost) * 100, 2) 
+    } else { 0 }
+    
+    Write-Host "This Week: `$$([math]::Round($thisWeekCost, 2))"
+    Write-Host "Last Week: `$$([math]::Round($lastWeekCost, 2))"
+    Write-Host "Change: $percentChange%"
+
+.EXAMPLE
+    # Get NAT Gateway data processed (bytes) metrics daily using Azure Monitor
+    
+    $natGateway = Get-AzNatGateway -ResourceGroupName "myRG" -Name "myNatGateway"
+    $startTime = (Get-Date).AddDays(-7)
+    $endTime = Get-Date
+    
+    # Get daily ByteCount metrics
+    $metrics = Get-AzMetric -ResourceId $natGateway.Id `
+        -MetricName "ByteCount" `
+        -StartTime $startTime `
+        -EndTime $endTime `
+        -TimeGrain 1.00:00:00 `
+        -AggregationType Total
+    
+    $metrics.Data | ForEach-Object {
+        [PSCustomObject]@{
+            Date = $_.TimeStamp.ToString("yyyy-MM-dd")
+            DataProcessedGB = [math]::Round($_.Total / 1GB, 2)
+        }
+    } | Format-Table -AutoSize
+
+.EXAMPLE
+    # Get all NAT Gateway consumption details with daily granularity
+    
+    $startDate = (Get-Date).AddDays(-7)
+    $endDate = Get-Date
+    
+    $usage = Get-AzConsumptionUsageDetail -StartDate $startDate -EndDate $endDate |
+        Where-Object { $_.InstanceId -match "natGateways" } |
+        Select-Object @{N='Date';E={$_.UsageStart.ToString("yyyy-MM-dd")}},
+                      @{N='NATGateway';E={($_.InstanceId -split '/')[-1]}},
+                      @{N='MeterName';E={$_.MeterName}},
+                      @{N='Quantity';E={$_.UsageQuantity}},
+                      @{N='Cost';E={[math]::Round($_.PretaxCost, 4)}},
+                      Currency
+    
+    $usage | Sort-Object Date | Format-Table -AutoSize
+    
+    # Daily totals
+    $usage | Group-Object Date | ForEach-Object {
+        [PSCustomObject]@{
+            Date = $_.Name
+            TotalCost = [math]::Round(($_.Group | Measure-Object -Property Cost -Sum).Sum, 2)
+        }
+    } | Format-Table -AutoSize
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Single')]
