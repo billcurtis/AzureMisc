@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Deploys Azure Virtual Desktop with Ephemeral VMs as Session Hosts.
+    Deploys Azure Virtual Desktop with standard Azure VMs as Session Hosts.
 
 .DESCRIPTION
     This script creates the following resources:
@@ -10,7 +10,7 @@
     - AVD Host Pool
     - AVD Application Group
     - AVD Workspace
-    - Ephemeral VMs as Session Hosts (Entra Joined with Intune enrollment)
+    - Standard Azure VMs as Session Hosts (Entra Joined with Intune enrollment)
 
 .PARAMETER SubscriptionId
     The Azure Subscription ID to deploy resources to.
@@ -39,6 +39,12 @@
 .PARAMETER AdminPassword
     Local admin password for VMs.
 
+.PARAMETER OSDiskSizeGB
+    Size of the managed OS disk in GB. Default is 128.
+
+.PARAMETER OSDiskType
+    Storage account type for the managed OS disk. Default is Premium_LRS.
+
 .PARAMETER EnableAutoShutdown
     Enable auto-shutdown schedule for the VMs. Default is $true.
 
@@ -49,11 +55,11 @@
     Time zone for auto-shutdown. Default is Eastern Standard Time.
 
 .EXAMPLE
-    .\Deploy-EphemeralAVD.ps1 -SubscriptionId "your-sub-id" -AdminPassword (ConvertTo-SecureString "P@ssw0rd123!" -AsPlainText -Force)
+    .\Deploy-AVD.ps1 -SubscriptionId "your-sub-id" -AdminPassword (ConvertTo-SecureString "P@ssw0rd123!" -AsPlainText -Force)
 
 .NOTES
     Author: Azure Administrator
-    Date: January 2026
+    Date: February 2026
     Requires: Az PowerShell module, appropriate Azure permissions
 #>
 
@@ -63,7 +69,7 @@ param(
     [string]$SubscriptionId,
 
     [Parameter(Mandatory = $false)]
-    [string]$ResourceGroupName = "rg-avd-ephemeral-eastus2",
+    [string]$ResourceGroupName = "rg-avd-eastus2",
 
     [Parameter(Mandatory = $false)]
     [string]$Location = "EastUS2",
@@ -81,13 +87,13 @@ param(
     [string]$SubnetAddressPrefix = "10.0.1.0/24",
 
     [Parameter(Mandatory = $false)]
-    [string]$HostPoolName = "hp-avd-ephemeral",
+    [string]$HostPoolName = "hp-avd",
 
     [Parameter(Mandatory = $false)]
-    [string]$WorkspaceName = "ws-avd-ephemeral",
+    [string]$WorkspaceName = "ws-avd",
 
     [Parameter(Mandatory = $false)]
-    [string]$AppGroupName = "dag-avd-ephemeral",
+    [string]$AppGroupName = "dag-avd",
 
     [Parameter(Mandatory = $false)]
     [int]$SessionHostCount = 2,
@@ -102,7 +108,7 @@ param(
     [string]$PublicIpName = "pip-natgw-avd",
 
     [Parameter(Mandatory = $false)]
-    [string]$VMPrefix = "avdeph",
+    [string]$VMPrefix = "avdsh",
 
     [Parameter(Mandatory = $false)]
     [string]$AdminUsername = "avdadmin",
@@ -121,6 +127,13 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string]$ImageVersion = "latest",
+
+    [Parameter(Mandatory = $false)]
+    [int]$OSDiskSizeGB = 128,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("Premium_LRS", "StandardSSD_LRS", "Standard_LRS")]
+    [string]$OSDiskType = "Premium_LRS",
 
     [Parameter(Mandatory = $false)]
     [bool]$EnableAutoShutdown = $true,
@@ -155,25 +168,25 @@ function Write-Log {
     Write-Host "[$timestamp] [$Level] $Message" -ForegroundColor $color
 }
 
-function Get-EphemeralVMSize {
+function Get-AVDVMSize {
     <#
     .SYNOPSIS
-        Finds an Ephemeral OS disk capable VM size with at least the specified number of cores.
+        Finds a suitable VM size with at least the specified number of cores.
     #>
     param(
         [string]$Location,
         [int]$MinCores = 2
     )
 
-    Write-Log "Searching for Ephemeral OS disk capable VM with at least $MinCores cores in region '$Location'..." -Level Info
+    Write-Log "Searching for a suitable VM size with at least $MinCores cores in region '$Location'..." -Level Info
 
     try {
         # Get all VM sizes in the region
         $allVMSizes = Get-AzComputeResourceSku -Location $Location | 
         Where-Object { $_.ResourceType -eq "virtualMachines" }
 
-        # Filter for Ephemeral support, minimum cores, and sufficient disk space for Windows 11 AVD (127GB)
-        $ephemeralSizes = $allVMSizes | Where-Object {
+        # Filter for minimum cores and general-purpose VM families
+        $suitableSizes = $allVMSizes | Where-Object {
             $sku = $_
             $skuName = $sku.Name
             
@@ -184,23 +197,10 @@ function Get-EphemeralVMSize {
             # Prefer D-series, E-series, F-series (general purpose VMs commonly available)
             if ($skuName -notmatch "^Standard_(D|E|F)") { return $false }
             
-            $ephemeralSupport = $sku.Capabilities | Where-Object { $_.Name -eq "EphemeralOSDiskSupported" -and $_.Value -eq "True" }
             $vCPUs = ($sku.Capabilities | Where-Object { $_.Name -eq "vCPUs" }).Value
-            $cacheDiskSize = ($sku.Capabilities | Where-Object { $_.Name -eq "CachedDiskBytes" }).Value
-            $resourceDiskSize = ($sku.Capabilities | Where-Object { $_.Name -eq "MaxResourceVolumeMB" }).Value
-            
-            # Check if ephemeral is supported
-            if (-not $ephemeralSupport) { return $false }
             
             # Check minimum cores
             if ([int]$vCPUs -lt $MinCores) { return $false }
-            
-            # Check if either cache disk or resource disk is large enough for Windows 11 AVD (127GB for full image)
-            $cacheDiskGB = if ($cacheDiskSize) { [math]::Floor([long]$cacheDiskSize / 1GB) } else { 0 }
-            $resourceDiskGB = if ($resourceDiskSize) { [math]::Floor([long]$resourceDiskSize / 1024) } else { 0 }
-            
-            # Require at least 127GB on either cache or resource disk for Windows 11 AVD image
-            if ($cacheDiskGB -lt 127 -and $resourceDiskGB -lt 127) { return $false }
             
             # Exclude restricted/preview SKUs
             $restrictions = $sku.Restrictions | Where-Object { $_.Type -eq "Location" }
@@ -211,78 +211,31 @@ function Get-EphemeralVMSize {
             $sku = $_
             $vCPUs = [int](($sku.Capabilities | Where-Object { $_.Name -eq "vCPUs" }).Value)
             $memoryGB = [math]::Round([decimal](($sku.Capabilities | Where-Object { $_.Name -eq "MemoryGB" }).Value), 2)
-            $cacheDiskSize = ($sku.Capabilities | Where-Object { $_.Name -eq "CachedDiskBytes" }).Value
-            $resourceDiskSize = ($sku.Capabilities | Where-Object { $_.Name -eq "MaxResourceVolumeMB" }).Value
-            $cacheDiskGB = if ($cacheDiskSize) { [math]::Floor([long]$cacheDiskSize / 1GB) } else { 0 }
-            $resourceDiskGB = if ($resourceDiskSize) { [math]::Floor([long]$resourceDiskSize / 1024) } else { 0 }
             
             [PSCustomObject]@{
-                Name           = $sku.Name
-                vCPUs          = $vCPUs
-                MemoryGB       = $memoryGB
-                CacheDiskGB    = $cacheDiskGB
-                ResourceDiskGB = $resourceDiskGB
+                Name     = $sku.Name
+                vCPUs    = $vCPUs
+                MemoryGB = $memoryGB
             }
         } | Sort-Object vCPUs, MemoryGB
 
-        if (-not $ephemeralSizes -or $ephemeralSizes.Count -eq 0) {
-            Write-Log "No Ephemeral OS disk capable VM sizes found with at least $MinCores cores in region '$Location'." -Level Error
+        if (-not $suitableSizes -or $suitableSizes.Count -eq 0) {
+            Write-Log "No suitable VM sizes found with at least $MinCores cores in region '$Location'." -Level Error
             return $null
         }
 
         # Select the smallest VM that meets the requirements (cost-effective choice)
-        $selectedSize = $ephemeralSizes | Select-Object -First 1
+        $selectedSize = $suitableSizes | Select-Object -First 1
         
-        Write-Log "Found $($ephemeralSizes.Count) Ephemeral-capable VM sizes with at least $MinCores cores." -Level Success
+        Write-Log "Found $($suitableSizes.Count) suitable VM sizes with at least $MinCores cores." -Level Success
         Write-Log "Selected VM Size: $($selectedSize.Name)" -Level Success
         Write-Log "  - vCPUs: $($selectedSize.vCPUs)" -Level Info
         Write-Log "  - Memory: $($selectedSize.MemoryGB) GB" -Level Info
-        Write-Log "  - Cache Disk: $($selectedSize.CacheDiskGB) GB" -Level Info
-        Write-Log "  - Resource Disk: $($selectedSize.ResourceDiskGB) GB" -Level Info
 
         return $selectedSize.Name
     }
     catch {
-        Write-Log "Error finding Ephemeral VM size: $_" -Level Error
-        return $null
-    }
-}
-
-function Get-EphemeralPlacement {
-    <#
-    .SYNOPSIS
-        Determines the best placement for Ephemeral OS disk (CacheDisk or ResourceDisk).
-        Returns $null if neither option has sufficient space.
-    #>
-    param(
-        [string]$Location,
-        [string]$VMSize,
-        [int]$RequiredDiskSizeGB = 127  # Windows 11 AVD image default size
-    )
-
-    $vmSizes = Get-AzComputeResourceSku -Location $Location | 
-    Where-Object { $_.ResourceType -eq "virtualMachines" -and $_.Name -eq $VMSize }
-
-    $cacheDiskBytes = ($vmSizes.Capabilities | Where-Object { $_.Name -eq "CachedDiskBytes" }).Value
-    $resourceDiskMB = ($vmSizes.Capabilities | Where-Object { $_.Name -eq "MaxResourceVolumeMB" }).Value
-    
-    $cacheDiskGB = if ($cacheDiskBytes) { [math]::Floor([long]$cacheDiskBytes / 1GB) } else { 0 }
-    $resourceDiskGB = if ($resourceDiskMB) { [math]::Floor([long]$resourceDiskMB / 1024) } else { 0 }
-    
-    Write-Log "  VM '$VMSize' disk sizes - Cache: ${cacheDiskGB}GB, Resource: ${resourceDiskGB}GB (Required: ${RequiredDiskSizeGB}GB)" -Level Info
-    
-    # Prefer CacheDisk placement if cache is large enough
-    if ($cacheDiskGB -ge $RequiredDiskSizeGB) {
-        Write-Log "  Using CacheDisk placement (${cacheDiskGB}GB available)" -Level Info
-        return "CacheDisk"
-    }
-    # Fall back to ResourceDisk if large enough
-    elseif ($resourceDiskGB -ge $RequiredDiskSizeGB) {
-        Write-Log "  Using ResourceDisk placement (${resourceDiskGB}GB available)" -Level Info
-        return "ResourceDisk"
-    }
-    else {
-        Write-Log "  Neither CacheDisk (${cacheDiskGB}GB) nor ResourceDisk (${resourceDiskGB}GB) is large enough for ${RequiredDiskSizeGB}GB OS disk" -Level Warning
+        Write-Log "Error finding VM size: $_" -Level Error
         return $null
     }
 }
@@ -292,13 +245,14 @@ function Get-EphemeralPlacement {
 #region Main Script
 
 Write-Log "========================================" -Level Info
-Write-Log "Azure Virtual Desktop - Ephemeral VM Deployment" -Level Info
+Write-Log "Azure Virtual Desktop - VM Deployment" -Level Info
 Write-Log "========================================" -Level Info
 Write-Log "Location: $Location" -Level Info
 Write-Log "Resource Group: $ResourceGroupName" -Level Info
 Write-Log "Host Pool: $HostPoolName" -Level Info
 Write-Log "Session Host Count: $SessionHostCount" -Level Info
 Write-Log "Minimum Cores: $MinCores" -Level Info
+Write-Log "OS Disk Size: $OSDiskSizeGB GB ($OSDiskType)" -Level Info
 Write-Log "========================================" -Level Info
 
 # Step 0: Connect to Azure and set subscription
@@ -373,20 +327,13 @@ catch {
     exit 1
 }
 
-# Step 2: Find Ephemeral VM Size
-Write-Log "Step 2: Finding Ephemeral VM Size with at least $MinCores cores..." -Level Info
-$VMSize = Get-EphemeralVMSize -Location $Location -MinCores $MinCores
+# Step 2: Find VM Size
+Write-Log "Step 2: Finding VM Size with at least $MinCores cores..." -Level Info
+$VMSize = Get-AVDVMSize -Location $Location -MinCores $MinCores
 if (-not $VMSize) {
-    Write-Log "No suitable Ephemeral VM size found. Please try a different region or reduce MinCores." -Level Error
+    Write-Log "No suitable VM size found. Please try a different region or reduce MinCores." -Level Error
     exit 1
 }
-
-$ephemeralPlacement = Get-EphemeralPlacement -Location $Location -VMSize $VMSize
-if (-not $ephemeralPlacement) {
-    Write-Log "Selected VM size '$VMSize' does not have sufficient disk space for Windows 11 AVD. Trying to find another size..." -Level Error
-    exit 1
-}
-Write-Log "Ephemeral OS disk placement will be: $ephemeralPlacement" -Level Success
 
 # Step 3: Create Resource Group
 Write-Log "Step 3: Creating Resource Group '$ResourceGroupName'..." -Level Info
@@ -436,8 +383,8 @@ catch {
     exit 1
 }
 
-# Step 4.5: Create NAT Gateway with Public IP
-Write-Log "Step 4.5: Creating NAT Gateway '$NatGatewayName'..." -Level Info
+# Step 5: Create NAT Gateway with Public IP
+Write-Log "Step 5: Creating NAT Gateway '$NatGatewayName'..." -Level Info
 try {
     $natGateway = Get-AzNatGateway -Name $NatGatewayName -ResourceGroupName $ResourceGroupName -ErrorAction SilentlyContinue
     if (-not $natGateway) {
@@ -511,8 +458,8 @@ catch {
     exit 1
 }
 
-# Step 5: Create AVD Host Pool
-Write-Log "Step 5: Creating AVD Host Pool '$HostPoolName'..." -Level Info
+# Step 6: Create AVD Host Pool
+Write-Log "Step 6: Creating AVD Host Pool '$HostPoolName'..." -Level Info
 try {
     $hostPool = Get-AzWvdHostPool -Name $HostPoolName -ResourceGroupName $ResourceGroupName -ErrorAction SilentlyContinue
     if (-not $hostPool) {
@@ -552,8 +499,8 @@ catch {
     exit 1
 }
 
-# Step 6: Create AVD Application Group
-Write-Log "Step 6: Creating AVD Application Group '$AppGroupName'..." -Level Info
+# Step 7: Create AVD Application Group
+Write-Log "Step 7: Creating AVD Application Group '$AppGroupName'..." -Level Info
 try {
     $appGroup = Get-AzWvdApplicationGroup -Name $AppGroupName -ResourceGroupName $ResourceGroupName -ErrorAction SilentlyContinue
     if (-not $appGroup) {
@@ -578,8 +525,8 @@ catch {
     exit 1
 }
 
-# Step 7: Create AVD Workspace
-Write-Log "Step 7: Creating AVD Workspace '$WorkspaceName'..." -Level Info
+# Step 8: Create AVD Workspace
+Write-Log "Step 8: Creating AVD Workspace '$WorkspaceName'..." -Level Info
 try {
     $workspace = Get-AzWvdWorkspace -Name $WorkspaceName -ResourceGroupName $ResourceGroupName -ErrorAction SilentlyContinue
     if (-not $workspace) {
@@ -612,8 +559,8 @@ catch {
     exit 1
 }
 
-# Step 8: Generate Host Pool Registration Token
-Write-Log "Step 8: Generating Host Pool Registration Token..." -Level Info
+# Step 9: Generate Host Pool Registration Token
+Write-Log "Step 9: Generating Host Pool Registration Token..." -Level Info
 try {
     $tokenExpirationTime = (Get-Date).AddHours(24)
     $registrationInfo = New-AzWvdRegistrationInfo `
@@ -630,8 +577,8 @@ catch {
     exit 1
 }
 
-# Step 9: Deploy Ephemeral VMs as Session Hosts
-Write-Log "Step 9: Deploying $SessionHostCount Ephemeral VMs as Session Hosts..." -Level Info
+# Step 10: Deploy VMs as Session Hosts
+Write-Log "Step 10: Deploying $SessionHostCount VMs as Session Hosts..." -Level Info
 
 # Create credential object
 $credential = New-Object System.Management.Automation.PSCredential($AdminUsername, $AdminPassword)
@@ -779,18 +726,18 @@ for ($i = 1; $i -le $SessionHostCount; $i++) {
         # Add network interface
         $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id -Primary
 
-        # Configure Ephemeral OS disk
-        Write-Log "  Configuring Ephemeral OS disk (Placement: $ephemeralPlacement)..." -Level Info
+        # Configure standard managed OS disk
+        Write-Log "  Configuring managed OS disk ($OSDiskSizeGB GB, $OSDiskType)..." -Level Info
         $vmConfig = Set-AzVMOSDisk `
             -VM $vmConfig `
             -Name "$vmName-osdisk" `
-            -Caching "ReadOnly" `
+            -Caching "ReadWrite" `
             -CreateOption "FromImage" `
-            -DiffDiskSetting "Local" `
-            -DiffDiskPlacement $ephemeralPlacement
+            -DiskSizeInGB $OSDiskSizeGB `
+            -StorageAccountType $OSDiskType
 
-        # Configure boot diagnostics (disabled for ephemeral)
-        $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Disable
+        # Configure boot diagnostics (managed storage)
+        $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable
 
         # Set Entra Join (Azure AD Join) identity
         $vmConfig.Identity = New-Object Microsoft.Azure.Management.Compute.Models.VirtualMachineIdentity
@@ -895,7 +842,7 @@ for ($i = 1; $i -le $SessionHostCount; $i++) {
             Write-Log "  Configuring auto-shutdown for '$vmName' at $AutoShutdownTime $AutoShutdownTimeZone..." -Level Info
             
             $vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName
-            $shutdownResourceId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-$vmName"
+            $shutdownResourceId = "/subscriptions/$currentSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-$vmName"
             
             $properties = @{
                 status               = "Enabled"
@@ -922,8 +869,8 @@ for ($i = 1; $i -le $SessionHostCount; $i++) {
     }
 }
 
-# Step 10: Verify Deployment
-Write-Log "Step 10: Verifying deployment..." -Level Info
+# Step 11: Verify Deployment
+Write-Log "Step 11: Verifying deployment..." -Level Info
 try {
     Start-Sleep -Seconds 30  # Wait for session hosts to register
 
@@ -954,9 +901,8 @@ Write-Log "NAT Gateway: $NatGatewayName" -Level Info
 Write-Log "Host Pool: $HostPoolName" -Level Info
 Write-Log "Workspace: $WorkspaceName" -Level Info
 Write-Log "Application Group: $AppGroupName" -Level Info
-Write-Log "Session Hosts: $SessionHostCount VMs with Ephemeral OS disks" -Level Info
+Write-Log "Session Hosts: $SessionHostCount VMs with managed OS disks ($OSDiskSizeGB GB, $OSDiskType)" -Level Info
 Write-Log "VM Size: $VMSize (auto-selected with $MinCores+ cores)" -Level Info
-Write-Log "Ephemeral Disk Placement: $ephemeralPlacement" -Level Info
 Write-Log "Entra ID Join: Enabled" -Level Info
 Write-Log "Intune Enrollment: Enabled" -Level Info
 Write-Log "========================================" -Level Info
