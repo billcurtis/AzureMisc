@@ -380,10 +380,13 @@ if ($ExportPath) {
     }
 }
 
+# Exclude ALLOW entries and select only the desired columns
+$logEntries = $logEntries | Where-Object { $_.action -ne 'ALLOW' } |
+    Select-Object date, time, action, protocol, 'src-ip', 'dst-ip', 'src-port'
+
 # Display results
-Write-Host "`nRecent Entries:" -ForegroundColor Cyan
-$logEntries | Select-Object -First 20 date, time, action, protocol, 'src-ip', 'dst-ip', 'src-port' |
-    Format-Table -AutoSize
+Write-Host "`nRecent Entries (non-ALLOW only):" -ForegroundColor Cyan
+$logEntries | Select-Object -First 20 | Format-Table -AutoSize
 
 # Return the full collection
 return $logEntries
