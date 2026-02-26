@@ -205,6 +205,12 @@ function Get-AVDVMSize {
             # Exclude restricted/preview SKUs
             $restrictions = $sku.Restrictions | Where-Object { $_.Type -eq "Location" }
             if ($restrictions) { return $false }
+
+            # If Premium SSD is requested, only include VM sizes that support it
+            if ($OSDiskType -eq "Premium_LRS") {
+                $premiumIO = ($sku.Capabilities | Where-Object { $_.Name -eq "PremiumIO" }).Value
+                if ($premiumIO -ne "True") { return $false }
+            }
             
             return $true
         } | ForEach-Object {
