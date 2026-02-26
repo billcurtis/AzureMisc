@@ -102,6 +102,7 @@ Set-Location $ScriptPath
 . "$ScriptPath\Modules\FlowLogParser.ps1"
 . "$ScriptPath\Modules\IPFilterManager.ps1"
 . "$ScriptPath\Modules\GUIComponents.ps1"
+. "$ScriptPath\Modules\IPOwnerLookup.ps1"
 
 # Configuration
 $script:Config = @{
@@ -373,7 +374,8 @@ $dgvIPSummary.ColumnHeadersDefaultCellStyle.ForeColor = [System.Drawing.Color]::
 $contextMenuIP = New-Object System.Windows.Forms.ContextMenuStrip
 $excludeIPMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem("Exclude Selected IP(s)")
 $copyIPMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem("Copy IP Address")
-$contextMenuIP.Items.AddRange(@($excludeIPMenuItem, $copyIPMenuItem))
+$lookupIPOwnerMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem("Lookup IP Owner")
+$contextMenuIP.Items.AddRange(@($excludeIPMenuItem, $copyIPMenuItem, $lookupIPOwnerMenuItem))
 $dgvIPSummary.ContextMenuStrip = $contextMenuIP
 
 $splitIPSummary.Panel1.Controls.Add($dgvIPSummary)
@@ -572,7 +574,100 @@ $pnlExclusions.Controls.AddRange(@($btnApplyExclusions, $btnSaveExclusions, $btn
 
 $tabExclusions.Controls.Add($pnlExclusions)
 
-# Tab 5: Port Summary
+# Tab 5: IP Owners
+$tabIPOwners = New-Object System.Windows.Forms.TabPage
+$tabIPOwners.Text = "IP Owners"
+$tabIPOwners.Padding = New-Object System.Windows.Forms.Padding(5)
+
+$splitIPOwners = New-Object System.Windows.Forms.SplitContainer
+$splitIPOwners.Dock = [System.Windows.Forms.DockStyle]::Fill
+$splitIPOwners.Orientation = [System.Windows.Forms.Orientation]::Vertical
+$splitIPOwners.SplitterDistance = 700
+
+# IP Owners control panel
+$pnlIPOwnersControls = New-Object System.Windows.Forms.Panel
+$pnlIPOwnersControls.Dock = [System.Windows.Forms.DockStyle]::Top
+$pnlIPOwnersControls.Height = 50
+
+$btnLookupIPOwners = New-Object System.Windows.Forms.Button
+$btnLookupIPOwners.Text = "Lookup All Public IP Owners"
+$btnLookupIPOwners.Location = New-Object System.Drawing.Point(10, 10)
+$btnLookupIPOwners.Size = New-Object System.Drawing.Size(200, 30)
+$btnLookupIPOwners.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
+$btnLookupIPOwners.ForeColor = [System.Drawing.Color]::White
+$btnLookupIPOwners.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+
+$btnClearIPOwnerCache = New-Object System.Windows.Forms.Button
+$btnClearIPOwnerCache.Text = "Clear Cache"
+$btnClearIPOwnerCache.Location = New-Object System.Drawing.Point(220, 10)
+$btnClearIPOwnerCache.Size = New-Object System.Drawing.Size(100, 30)
+
+$btnExportIPOwners = New-Object System.Windows.Forms.Button
+$btnExportIPOwners.Text = "Export to CSV"
+$btnExportIPOwners.Location = New-Object System.Drawing.Point(330, 10)
+$btnExportIPOwners.Size = New-Object System.Drawing.Size(100, 30)
+
+$lblIPOwnerNote = New-Object System.Windows.Forms.Label
+$lblIPOwnerNote.Text = "Uses ip-api.com (free, no API key). Private IPs are automatically skipped."
+$lblIPOwnerNote.Location = New-Object System.Drawing.Point(445, 17)
+$lblIPOwnerNote.AutoSize = $true
+$lblIPOwnerNote.ForeColor = [System.Drawing.Color]::Gray
+
+$pnlIPOwnersControls.Controls.AddRange(@($btnLookupIPOwners, $btnClearIPOwnerCache, $btnExportIPOwners, $lblIPOwnerNote))
+
+# IP Owners DataGridView
+$dgvIPOwners = New-Object System.Windows.Forms.DataGridView
+$dgvIPOwners.Dock = [System.Windows.Forms.DockStyle]::Fill
+$dgvIPOwners.AllowUserToAddRows = $false
+$dgvIPOwners.AllowUserToDeleteRows = $false
+$dgvIPOwners.ReadOnly = $true
+$dgvIPOwners.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
+$dgvIPOwners.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
+$dgvIPOwners.MultiSelect = $true
+$dgvIPOwners.AlternatingRowsDefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+$dgvIPOwners.ColumnHeadersDefaultCellStyle.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$dgvIPOwners.EnableHeadersVisualStyles = $false
+$dgvIPOwners.ColumnHeadersDefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
+$dgvIPOwners.ColumnHeadersDefaultCellStyle.ForeColor = [System.Drawing.Color]::White
+
+# Context menu for IP Owners grid
+$contextMenuIPOwners = New-Object System.Windows.Forms.ContextMenuStrip
+$copyIPOwnerMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem("Copy IP Address")
+$copyOwnerInfoMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem("Copy Owner Info")
+$contextMenuIPOwners.Items.AddRange(@($copyIPOwnerMenuItem, $copyOwnerInfoMenuItem))
+$dgvIPOwners.ContextMenuStrip = $contextMenuIPOwners
+
+$pnlIPOwnersGrid = New-Object System.Windows.Forms.Panel
+$pnlIPOwnersGrid.Dock = [System.Windows.Forms.DockStyle]::Fill
+$pnlIPOwnersGrid.Controls.Add($dgvIPOwners)
+$pnlIPOwnersGrid.Controls.Add($pnlIPOwnersControls)
+
+$splitIPOwners.Panel1.Controls.Add($pnlIPOwnersGrid)
+
+# IP Owner stats panel
+$pnlIPOwnerStats = New-Object System.Windows.Forms.Panel
+$pnlIPOwnerStats.Dock = [System.Windows.Forms.DockStyle]::Fill
+$pnlIPOwnerStats.AutoScroll = $true
+
+$lblIPOwnerStatsTitle = New-Object System.Windows.Forms.Label
+$lblIPOwnerStatsTitle.Text = "IP Owner Statistics"
+$lblIPOwnerStatsTitle.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+$lblIPOwnerStatsTitle.Location = New-Object System.Drawing.Point(10, 10)
+$lblIPOwnerStatsTitle.AutoSize = $true
+
+$txtIPOwnerStats = New-Object System.Windows.Forms.RichTextBox
+$txtIPOwnerStats.Location = New-Object System.Drawing.Point(10, 40)
+$txtIPOwnerStats.Size = New-Object System.Drawing.Size(400, 450)
+$txtIPOwnerStats.ReadOnly = $true
+$txtIPOwnerStats.BackColor = [System.Drawing.Color]::White
+$txtIPOwnerStats.Font = New-Object System.Drawing.Font("Consolas", 10)
+
+$pnlIPOwnerStats.Controls.AddRange(@($lblIPOwnerStatsTitle, $txtIPOwnerStats))
+$splitIPOwners.Panel2.Controls.Add($pnlIPOwnerStats)
+
+$tabIPOwners.Controls.Add($splitIPOwners)
+
+# Tab 6: Port Summary
 $tabPortSummary = New-Object System.Windows.Forms.TabPage
 $tabPortSummary.Text = "Port Summary"
 $tabPortSummary.Padding = New-Object System.Windows.Forms.Padding(5)
@@ -698,7 +793,7 @@ $splitPortSummary.Panel2.Controls.Add($pnlPortFilter)
 
 $tabPortSummary.Controls.Add($splitPortSummary)
 
-# Tab 6: Connection
+# Tab 7: Connection
 $tabConnection = New-Object System.Windows.Forms.TabPage
 $tabConnection.Text = "Connection"
 $tabConnection.Padding = New-Object System.Windows.Forms.Padding(10)
@@ -807,7 +902,7 @@ $pnlConnection.Controls.AddRange(@($grpAzureSignIn, $grpSubscription, $grpStorag
 $tabConnection.Controls.Add($pnlConnection)
 
 # Add tabs to tab control
-$tabControl.TabPages.AddRange(@($tabConnection, $tabFlowLogs, $tabIPSummary, $tabTimeSummary, $tabPortSummary, $tabExclusions))
+$tabControl.TabPages.AddRange(@($tabConnection, $tabFlowLogs, $tabIPSummary, $tabIPOwners, $tabTimeSummary, $tabPortSummary, $tabExclusions))
 
 $mainSplitContainer.Panel2.Controls.Add($tabControl)
 $mainForm.Controls.Add($mainSplitContainer)
@@ -1190,10 +1285,10 @@ $script:LoadTimer.Add_Tick({
                     [System.Windows.Forms.Application]::DoEvents()
                     
                     # Update all views
-                    Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $script:Config.FilteredData
+                    Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $script:Config.FilteredData -IPOwnerCache $script:IPOwnerResults
                     [System.Windows.Forms.Application]::DoEvents()
                     
-                    Update-IPSummaryGrid -DataGridView $dgvIPSummary -Data $script:Config.FilteredData -StatsTextBox $txtStats
+                    Update-IPSummaryGrid -DataGridView $dgvIPSummary -Data $script:Config.FilteredData -StatsTextBox $txtStats -IPOwnerCache $script:IPOwnerResults
                     [System.Windows.Forms.Application]::DoEvents()
                     
                     Update-TimeSummaryGrid -DataGridView $dgvTimeSummary -Data $script:Config.FilteredData -GroupBy $cmbGroupBy.SelectedItem
@@ -1514,7 +1609,7 @@ $btnSearch.Add_Click({
         $filtered = $filtered | Where-Object { $_.DestinationPort -eq $portNum }
     }
     
-    Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $filtered
+    Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $filtered -IPOwnerCache $script:IPOwnerResults
     $statusLabel.Text = "Found $(@($filtered).Count) matching records"
 })
 
@@ -1531,7 +1626,7 @@ $btnClearSearch.Add_Click({
         $statusLabel.Text = "Refreshing view... Please wait"
         [System.Windows.Forms.Application]::DoEvents()
         
-        Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $script:Config.FilteredData
+        Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $script:Config.FilteredData -IPOwnerCache $script:IPOwnerResults
         $statusLabel.Text = "Showing all $($script:Config.FilteredData.Count) records"
     }
 })
@@ -1563,7 +1658,7 @@ function Apply-QuickFilters {
         $data = $data | Where-Object { $_.Action -eq $action }
     }
     
-    Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $data
+    Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $data -IPOwnerCache $script:IPOwnerResults
     $statusLabel.Text = "Showing $($data.Count) filtered records"
 }
 
@@ -1676,11 +1771,11 @@ $btnApplyExclusions.Add_Click({
         
         $statusLabel.Text = "Updating Flow Logs grid..."
         [System.Windows.Forms.Application]::DoEvents()
-        Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $script:Config.FilteredData
+        Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $script:Config.FilteredData -IPOwnerCache $script:IPOwnerResults
         
         $statusLabel.Text = "Updating IP Summary grid..."
         [System.Windows.Forms.Application]::DoEvents()
-        Update-IPSummaryGrid -DataGridView $dgvIPSummary -Data $script:Config.FilteredData -StatsTextBox $txtStats
+        Update-IPSummaryGrid -DataGridView $dgvIPSummary -Data $script:Config.FilteredData -StatsTextBox $txtStats -IPOwnerCache $script:IPOwnerResults
         
         $statusLabel.Text = "Updating Time Summary grid..."
         [System.Windows.Forms.Application]::DoEvents()
@@ -1942,6 +2037,29 @@ $copyIPMenuItem.Add_Click({
     }
 })
 
+# Context menu - Lookup IP Owner
+$lookupIPOwnerMenuItem.Add_Click({
+    if ($dgvIPSummary.SelectedRows.Count -gt 0) {
+        $ip = $dgvIPSummary.SelectedRows[0].Cells["IPAddress"].Value
+        if ($ip) {
+            $statusLabel.Text = "Looking up owner for $ip..."
+            [System.Windows.Forms.Application]::DoEvents()
+            
+            $info = Get-IPOwnerInfo -IPAddress $ip
+            
+            $msg = "IP: $ip`n`n"
+            $msg += "Owner/Org: $($info.Owner)`n"
+            $msg += "ISP: $($info.ISP)`n"
+            $msg += "AS: $($info.AS)`n"
+            $msg += "Country: $($info.Country)`n"
+            $msg += "City: $($info.City)`n"
+            
+            [System.Windows.Forms.MessageBox]::Show($msg, "IP Owner Lookup", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            $statusLabel.Text = "Ready"
+        }
+    }
+})
+
 # Export to CSV
 $exportCsvMenuItem.Add_Click({
     if ($null -eq $script:Config.FilteredData -or $script:Config.FilteredData.Count -eq 0) {
@@ -2182,6 +2300,248 @@ $cmbCommonPorts.Add_SelectedIndexChanged({
     }
 })
 
+# ============================================
+# IP OWNER LOOKUP EVENT HANDLERS
+# ============================================
+
+function Update-IPOwnerGrid {
+    param(
+        [System.Windows.Forms.DataGridView]$DataGridView,
+        [hashtable]$OwnerData,
+        [array]$IPSummaryData,
+        [System.Windows.Forms.RichTextBox]$StatsTextBox
+    )
+    
+    $DataGridView.SuspendLayout()
+    $DataGridView.Visible = $false
+    
+    try {
+        $DataGridView.Columns.Clear()
+        $DataGridView.Rows.Clear()
+        
+        if ($null -eq $OwnerData -or $OwnerData.Count -eq 0) {
+            return
+        }
+        
+        # Add columns
+        $columns = @(
+            @{ Name = "IPAddress"; Header = "IP Address"; Width = 130 }
+            @{ Name = "Owner"; Header = "Owner/Org"; Width = 200 }
+            @{ Name = "ISP"; Header = "ISP"; Width = 180 }
+            @{ Name = "AS"; Header = "AS Number"; Width = 160 }
+            @{ Name = "Country"; Header = "Country"; Width = 100 }
+            @{ Name = "City"; Header = "City"; Width = 100 }
+            @{ Name = "Connections"; Header = "Connections"; Width = 90 }
+            @{ Name = "TotalData"; Header = "Total Data"; Width = 100 }
+        )
+        
+        foreach ($col in $columns) {
+            $column = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+            $column.Name = $col.Name
+            $column.HeaderText = $col.Header
+            $column.Width = $col.Width
+            $DataGridView.Columns.Add($column) | Out-Null
+        }
+        
+        # Build a lookup from IP summary data for connection counts
+        $ipStats = @{}
+        if ($IPSummaryData) {
+            $ipSummary = Get-IPSummary -Data $IPSummaryData
+            foreach ($s in $ipSummary) {
+                $ipStats[$s.IPAddress] = $s
+            }
+        }
+        
+        # Sort: public IPs first (by connections desc), then private
+        $sortedEntries = $OwnerData.Values | Sort-Object @{Expression={$_.Status -eq 'private'}}, @{Expression={
+            if ($ipStats.ContainsKey($_.IP)) { $ipStats[$_.IP].TotalConnections } else { 0 }
+        }; Descending=$true}
+        
+        foreach ($entry in $sortedEntries) {
+            $connections = 0
+            $totalData = "N/A"
+            if ($ipStats.ContainsKey($entry.IP)) {
+                $connections = $ipStats[$entry.IP].TotalConnections
+                $totalData = $ipStats[$entry.IP].TotalBytesFormatted
+            }
+            
+            $row = $DataGridView.Rows.Add()
+            $DataGridView.Rows[$row].Cells["IPAddress"].Value = $entry.IP
+            $DataGridView.Rows[$row].Cells["Owner"].Value = $entry.Owner
+            $DataGridView.Rows[$row].Cells["ISP"].Value = $entry.ISP
+            $DataGridView.Rows[$row].Cells["AS"].Value = $entry.AS
+            $DataGridView.Rows[$row].Cells["Country"].Value = $entry.Country
+            $DataGridView.Rows[$row].Cells["City"].Value = $entry.City
+            $DataGridView.Rows[$row].Cells["Connections"].Value = $connections
+            $DataGridView.Rows[$row].Cells["TotalData"].Value = $totalData
+            
+            # Color code: private = light blue, failed/error = light red
+            if ($entry.Status -eq 'private') {
+                $DataGridView.Rows[$row].DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(220, 235, 252)
+            }
+            elseif ($entry.Status -eq 'failed' -or $entry.Status -eq 'error') {
+                $DataGridView.Rows[$row].DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(255, 220, 220)
+            }
+        }
+        
+        # Update stats
+        if ($StatsTextBox) {
+            $publicIPs = @($OwnerData.Values | Where-Object { $_.Status -ne 'private' })
+            $privateIPs = @($OwnerData.Values | Where-Object { $_.Status -eq 'private' })
+            $successIPs = @($OwnerData.Values | Where-Object { $_.Status -eq 'success' })
+            
+            # Group by owner/org
+            $ownerGroups = $successIPs | Group-Object -Property Owner | Sort-Object -Property Count -Descending
+            
+            # Group by country
+            $countryGroups = $successIPs | Where-Object { $_.Country -ne 'N/A' } | Group-Object -Property Country | Sort-Object -Property Count -Descending
+            
+            $statsText = "IP OWNER STATISTICS`n"
+            $statsText += "========================================`n`n"
+            $statsText += "Total IPs Analyzed:  $($OwnerData.Count)`n"
+            $statsText += "Public IPs:          $($publicIPs.Count)`n"
+            $statsText += "Private/Reserved:    $($privateIPs.Count)`n"
+            $statsText += "Successfully Resolved: $($successIPs.Count)`n`n"
+            
+            $statsText += "TOP ORGANIZATIONS`n"
+            $statsText += "----------------------------------------`n"
+            $top10Orgs = $ownerGroups | Select-Object -First 10
+            foreach ($org in $top10Orgs) {
+                $statsText += "$($org.Count.ToString().PadLeft(5)) IPs - $($org.Name)`n"
+            }
+            
+            $statsText += "`nTOP COUNTRIES`n"
+            $statsText += "----------------------------------------`n"
+            $top10Countries = $countryGroups | Select-Object -First 10
+            foreach ($country in $top10Countries) {
+                $statsText += "$($country.Count.ToString().PadLeft(5)) IPs - $($country.Name)`n"
+            }
+            
+            $StatsTextBox.Text = $statsText
+        }
+    }
+    finally {
+        $DataGridView.Visible = $true
+        $DataGridView.ResumeLayout()
+    }
+}
+
+# Lookup All Public IP Owners button
+$btnLookupIPOwners.Add_Click({
+    if ($null -eq $script:Config.FilteredData -or $script:Config.FilteredData.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show("Please load flow log data first.", "No Data", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        return
+    }
+    
+    $statusLabel.Text = "Collecting unique IP addresses..."
+    $progressBar.Visible = $true
+    $progressBar.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
+    $mainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+    $btnLookupIPOwners.Enabled = $false
+    [System.Windows.Forms.Application]::DoEvents()
+    
+    try {
+        # Get all unique IPs from current filtered data
+        $allIPs = @()
+        $allIPs += @($script:Config.FilteredData | Select-Object -ExpandProperty SourceIP -Unique)
+        $allIPs += @($script:Config.FilteredData | Select-Object -ExpandProperty DestinationIP -Unique)
+        $uniqueIPs = @($allIPs | Sort-Object -Unique)
+        
+        $statusLabel.Text = "Found $($uniqueIPs.Count) unique IPs. Starting ownership lookups..."
+        [System.Windows.Forms.Application]::DoEvents()
+        
+        # Progress callback to update status bar
+        $progressCallback = {
+            param($message)
+            $statusLabel.Text = $message
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        
+        # Perform bulk lookup
+        $ownerResults = Get-BulkIPOwnerInfo -IPAddresses $uniqueIPs -ProgressCallback $progressCallback
+        
+        $statusLabel.Text = "Updating IP Owner grid..."
+        [System.Windows.Forms.Application]::DoEvents()
+        
+        # Store results for export
+        $script:IPOwnerResults = $ownerResults
+        
+        # Update the IP Owners tab grid
+        Update-IPOwnerGrid -DataGridView $dgvIPOwners -OwnerData $ownerResults -IPSummaryData $script:Config.FilteredData -StatsTextBox $txtIPOwnerStats
+        
+        # Refresh Flow Log Details grid with owner columns
+        $statusLabel.Text = "Refreshing Flow Log Details with owner data..."
+        [System.Windows.Forms.Application]::DoEvents()
+        Update-FlowLogGrid -DataGridView $dgvFlowLogs -Data $script:Config.FilteredData -IPOwnerCache $ownerResults
+        
+        # Refresh IP Summary grid with owner columns
+        $statusLabel.Text = "Refreshing IP Summary with owner data..."
+        [System.Windows.Forms.Application]::DoEvents()
+        Update-IPSummaryGrid -DataGridView $dgvIPSummary -Data $script:Config.FilteredData -StatsTextBox $txtStats -IPOwnerCache $ownerResults
+        
+        $publicCount = @($ownerResults.Values | Where-Object { $_.Status -ne 'private' }).Count
+        $statusLabel.Text = "IP owner lookup complete. $publicCount public IPs resolved out of $($uniqueIPs.Count) total."
+    }
+    catch {
+        $errorMessage = $_.Exception.Message
+        $statusLabel.Text = "IP owner lookup failed"
+        [System.Windows.Forms.MessageBox]::Show("Error performing IP owner lookup:`n`n$errorMessage", "Lookup Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+    finally {
+        $progressBar.Visible = $false
+        $mainForm.Cursor = [System.Windows.Forms.Cursors]::Default
+        $btnLookupIPOwners.Enabled = $true
+    }
+})
+
+# Clear IP Owner Cache button
+$btnClearIPOwnerCache.Add_Click({
+    Clear-IPOwnerCache
+    $dgvIPOwners.Rows.Clear()
+    $dgvIPOwners.Columns.Clear()
+    $txtIPOwnerStats.Text = ""
+    $script:IPOwnerResults = $null
+    $statusLabel.Text = "IP owner cache cleared"
+})
+
+# Export IP Owners to CSV
+$btnExportIPOwners.Add_Click({
+    if ($null -eq $script:IPOwnerResults -or $script:IPOwnerResults.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show("No IP owner data to export. Run a lookup first.", "No Data", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        return
+    }
+    
+    $saveDialog = New-Object System.Windows.Forms.SaveFileDialog
+    $saveDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+    $saveDialog.DefaultExt = "csv"
+    $saveDialog.FileName = "IPOwners_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+    
+    if ($saveDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        $script:IPOwnerResults.Values | 
+            Select-Object IP, Owner, ISP, Org, AS, Country, City, Status | 
+            Export-Csv -Path $saveDialog.FileName -NoTypeInformation
+        [System.Windows.Forms.MessageBox]::Show("IP owner data exported successfully.", "Export Complete", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    }
+})
+
+# Context menu - Copy IP from IP Owners grid
+$copyIPOwnerMenuItem.Add_Click({
+    if ($dgvIPOwners.SelectedRows.Count -gt 0) {
+        $ips = ($dgvIPOwners.SelectedRows | ForEach-Object { $_.Cells["IPAddress"].Value }) -join "`r`n"
+        [System.Windows.Forms.Clipboard]::SetText($ips)
+    }
+})
+
+# Context menu - Copy Owner Info from IP Owners grid
+$copyOwnerInfoMenuItem.Add_Click({
+    if ($dgvIPOwners.SelectedRows.Count -gt 0) {
+        $info = ($dgvIPOwners.SelectedRows | ForEach-Object { 
+            "$($_.Cells["IPAddress"].Value) | $($_.Cells["Owner"].Value) | $($_.Cells["ISP"].Value) | $($_.Cells["Country"].Value)"
+        }) -join "`r`n"
+        [System.Windows.Forms.Clipboard]::SetText($info)
+    }
+})
+
 # Form Load event - set splitter distance after form is sized
 $mainForm.Add_Load({
     $mainSplitContainer.SplitterDistance = 115
@@ -2220,6 +2580,9 @@ $toolTip.SetToolTip($btnClearExclusions, "Remove all IP addresses and CIDR range
 $toolTip.SetToolTip($btnFilterByPort, "Filter the data to show only records with the specified port number")
 $toolTip.SetToolTip($btnShowAllPorts, "Clear the port filter and show all port data")
 $toolTip.SetToolTip($btnAzureSignIn, "Sign in to Azure using your Microsoft account")
+$toolTip.SetToolTip($btnLookupIPOwners, "Look up ownership info for all public IPs using ip-api.com (free)")
+$toolTip.SetToolTip($btnClearIPOwnerCache, "Clear the cached IP owner lookup results")
+$toolTip.SetToolTip($btnExportIPOwners, "Export IP owner lookup results to a CSV file")
 
 # Show the form
 [void]$mainForm.ShowDialog()

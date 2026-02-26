@@ -14,12 +14,17 @@ function Update-FlowLogGrid {
         
         [Parameter(Mandatory = $true)]
         [AllowEmptyCollection()]
-        [array]$Data
+        [array]$Data,
+        
+        [Parameter(Mandatory = $false)]
+        [hashtable]$IPOwnerCache = $null
     )
     
     # Suspend drawing for performance
     $DataGridView.SuspendLayout()
     $DataGridView.Visible = $false
+    
+    $hasOwnerData = ($null -ne $IPOwnerCache -and $IPOwnerCache.Count -gt 0)
     
     try {
         $DataGridView.Rows.Clear()
@@ -44,6 +49,14 @@ function Update-FlowLogGrid {
             @{ Name = "TotalPackets"; Header = "Packets"; Width = 70 }
             @{ Name = "RuleName"; Header = "Rule"; Width = 200 }
         )
+        
+        # Add owner columns if lookup data is available
+        if ($hasOwnerData) {
+            $columns += @(
+                @{ Name = "SourceOwner"; Header = "Source Owner"; Width = 160 }
+                @{ Name = "DestOwner"; Header = "Dest Owner"; Width = 160 }
+            )
+        }
         
         foreach ($col in $columns) {
             $column = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
@@ -80,6 +93,22 @@ function Update-FlowLogGrid {
             $DataGridView.Rows[$row].Cells["TotalPackets"].Value = [int]($record.TotalPackets ?? 0)
             $DataGridView.Rows[$row].Cells["RuleName"].Value = $record.RuleName
             
+            # Populate owner columns if data available
+            if ($hasOwnerData) {
+                $srcOwner = ""
+                $dstOwner = ""
+                if ($record.SourceIP -and $IPOwnerCache.ContainsKey($record.SourceIP)) {
+                    $srcInfo = $IPOwnerCache[$record.SourceIP]
+                    $srcOwner = if ($srcInfo.Status -eq 'private') { 'Private' } else { $srcInfo.Owner }
+                }
+                if ($record.DestinationIP -and $IPOwnerCache.ContainsKey($record.DestinationIP)) {
+                    $dstInfo = $IPOwnerCache[$record.DestinationIP]
+                    $dstOwner = if ($dstInfo.Status -eq 'private') { 'Private' } else { $dstInfo.Owner }
+                }
+                $DataGridView.Rows[$row].Cells["SourceOwner"].Value = $srcOwner
+                $DataGridView.Rows[$row].Cells["DestOwner"].Value = $dstOwner
+            }
+            
             # Color code by action
             if ($record.Action -eq 'D') {
                 $DataGridView.Rows[$row].DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(255, 200, 200)
@@ -110,7 +139,10 @@ function Update-IPSummaryGrid {
         [array]$Data,
         
         [Parameter(Mandatory = $false)]
-        [System.Windows.Forms.RichTextBox]$StatsTextBox = $null
+        [System.Windows.Forms.RichTextBox]$StatsTextBox = $null,
+        
+        [Parameter(Mandatory = $false)]
+        [hashtable]$IPOwnerCache = $null
     )
     
     $DataGridView.Rows.Clear()
@@ -120,12 +152,16 @@ function Update-IPSummaryGrid {
         return
     }
     
+    $hasOwnerData = ($null -ne $IPOwnerCache -and $IPOwnerCache.Count -gt 0)
+    
     # Get IP summary
     $ipSummary = Get-IPSummary -Data $Data
     
     # Add columns
     $columns = @(
         @{ Name = "IPAddress"; Header = "IP Address"; Width = 130 }
+        @{ Name = "Owner"; Header = "Owner"; Width = 160 }
+        @{ Name = "Country"; Header = "Country"; Width = 80 }
         @{ Name = "TotalConnections"; Header = "Connections"; Width = 90 }
         @{ Name = "AsSource"; Header = "As Source"; Width = 80 }
         @{ Name = "AsDestination"; Header = "As Dest"; Width = 80 }
@@ -148,6 +184,18 @@ function Update-IPSummaryGrid {
     foreach ($record in $ipSummary) {
         $row = $DataGridView.Rows.Add()
         $DataGridView.Rows[$row].Cells["IPAddress"].Value = $record.IPAddress
+        
+        # Populate owner and country columns
+        $ownerText = ""
+        $countryText = ""
+        if ($hasOwnerData -and $record.IPAddress -and $IPOwnerCache.ContainsKey($record.IPAddress)) {
+            $info = $IPOwnerCache[$record.IPAddress]
+            $ownerText = if ($info.Status -eq 'private') { 'Private/Reserved' } else { $info.Owner }
+            $countryText = if ($info.Status -eq 'private') { '' } else { $info.Country }
+        }
+        $DataGridView.Rows[$row].Cells["Owner"].Value = $ownerText
+        $DataGridView.Rows[$row].Cells["Country"].Value = $countryText
+        
         $DataGridView.Rows[$row].Cells["TotalConnections"].Value = $record.TotalConnections
         $DataGridView.Rows[$row].Cells["AsSource"].Value = $record.AsSource
         $DataGridView.Rows[$row].Cells["AsDestination"].Value = $record.AsDestination
