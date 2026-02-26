@@ -137,7 +137,8 @@ function Enable-FirewallLogging {
         }
         
         Write-Host "Firewall logging enabled successfully for all profiles." -ForegroundColor Green
-        Write-Host "Log file location: $(Get-NetFirewallProfile -Profile Domain | Select-Object -ExpandProperty LogFileName)" -ForegroundColor Green
+        $logFile = [Environment]::ExpandEnvironmentVariables((Get-NetFirewallProfile -Profile Domain | Select-Object -ExpandProperty LogFileName))
+        Write-Host "Log file location: $logFile" -ForegroundColor Green
         Write-Warning "Note: It may take a few moments for log entries to appear."
         
         return $true
@@ -159,15 +160,19 @@ function Get-FirewallLogPath {
         $profiles = @('Domain', 'Private', 'Public')
         foreach ($profile in $profiles) {
             $logFile = Get-NetFirewallProfile -Profile $profile -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LogFileName
-            if ($logFile -and (Test-Path -Path $logFile)) {
-                return $logFile
+            if ($logFile) {
+                # Expand cmd-style %var% environment variables (e.g. %systemroot%)
+                $logFile = [Environment]::ExpandEnvironmentVariables($logFile)
+                if (Test-Path -Path $logFile) {
+                    return $logFile
+                }
             }
         }
         
-        # If no existing log found, return the first configured path
+        # If no existing log found, return the first configured path (expanded)
         $logFile = Get-NetFirewallProfile -Profile Domain -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LogFileName
         if ($logFile) {
-            return $logFile
+            return [Environment]::ExpandEnvironmentVariables($logFile)
         }
         
         # Fallback to default location
@@ -377,10 +382,8 @@ if ($ExportPath) {
 
 # Display results
 Write-Host "`nRecent Entries:" -ForegroundColor Cyan
-$logEntries | Select-Object -First 20 DateTime, ActionText, ProtocolText, 
-    @{Name='Source'; Expression={"$($_.'src-ip'):$($_.'src-port')"}},
-    @{Name='Destination'; Expression={"$($_.'dst-ip'):$($_.'dst-port')"}},
-    path | Format-Table -AutoSize
+$logEntries | Select-Object -First 20 date, time, action, protocol, 'src-ip', 'dst-ip', 'src-port' |
+    Format-Table -AutoSize
 
 # Return the full collection
 return $logEntries
