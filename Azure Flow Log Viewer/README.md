@@ -15,8 +15,10 @@ This tool provides a user-friendly Windows Forms interface to browse Azure VNET 
 - **Multiple Views**:
   - **Flow Logs**: Detailed view of all flow records with color-coded actions
   - **IP Summary**: Aggregated data transfer statistics by IP address
+  - **IP Owners**: WHOIS/ownership lookup for all public IPs (org, ISP, AS, country)
   - **Time Summary**: Data transfer grouped by hour, day, or month
   - **Port Summary**: Traffic analysis by port number with filtering
+- **IP Owner Lookup**: Bulk ownership lookups for public IPs via ip-api.com (free, no API key required). Owner data populates across Flow Log Details, IP Summary, and IP Owners tabs.
 - **Quick Filters**: Filter by direction (Inbound/Outbound), action (Allow/Deny), IP address, and ports
 - **CSV Export**: Export filtered data to CSV files for further analysis
 - **Optimized Performance**: Radix tree for O(1) CIDR lookups, background loading with progress feedback
@@ -48,6 +50,7 @@ VNETFlowLogs/
     ├── AzureFlowLogConnection.ps1  # Azure authentication & blob access
     ├── FlowLogParser.ps1           # VNET/NSG flow log JSON parsing
     ├── IPFilterManager.ps1         # IP/CIDR exclusion with radix tree
+    ├── IPOwnerLookup.ps1           # Public IP WHOIS/ownership lookups
     └── GUIComponents.ps1           # DataGridView update functions
 ```
 
@@ -108,6 +111,11 @@ flowchart TD
     T -->|View IP Summary| V[📈 IP Summary Tab]
     V --> S
     
+    T -->|Lookup IP Owners| VI[🔍 IP Owners Tab]
+    VI --> VIA[Bulk Lookup via ip-api.com]
+    VIA --> VIB[Populate Owner Columns in Flow Logs & IP Summary]
+    VIB --> S
+    
     T -->|View Time Summary| W[⏱️ Time Summary Tab]
     W --> S
     
@@ -134,8 +142,7 @@ flowchart TD
 |--------|---------|
 | **AzureFlowLogConnection** | Handles Azure sign-in, subscription/storage enumeration, blob downloading with storage key or RBAC authentication fallback |
 | **FlowLogParser** | Parses VNET Flow Log v4 format (space-separated tuples with millisecond timestamps) |
-| **IPFilterManager** | Manages IP exclusion list with radix tree (trie) data structure for fast O(1) CIDR matching |
-| **GUIComponents** | Updates DataGridView controls with flow log data, IP summaries, time summaries, and statistics |
+| **IPFilterManager** | Manages IP exclusion list with radix tree (trie) data structure for fast O(1) CIDR matching || **IPOwnerLookup** | Performs WHOIS/ownership lookups for public IPs using ip-api.com batch API with caching and rate limiting || **GUIComponents** | Updates DataGridView controls with flow log data, IP summaries, time summaries, and statistics |
 
 ## Tabs Overview
 
@@ -148,14 +155,28 @@ flowchart TD
 ### Flow Logs Tab
 - Displays individual flow records in a sortable grid
 - Columns: Timestamp, Source/Dest IP, Ports, Protocol, Direction, Action, State, Data Size, Packets, Rule
+- After running IP Owner Lookup, additional **Source Owner** and **Dest Owner** columns appear
 - Red-highlighted rows indicate denied traffic
 - Quick filters for IP search, direction, action, and port filtering
 
 ### IP Summary Tab
 - Aggregated view showing total traffic per IP address
 - Shows connection count, total MB sent/received, packet counts
+- **Owner** and **Country** columns populated after running IP Owner Lookup
 - Statistics panel with overall traffic summary
-- Right-click to add IPs to exclusion list
+- Right-click to add IPs to exclusion list or look up IP ownership
+
+### IP Owners Tab
+- Bulk lookup of WHOIS/ownership data for all public IPs in the loaded flow logs
+- Click **"Lookup All Public IP Owners"** to resolve all unique IPs
+- Uses [ip-api.com](http://ip-api.com) free batch API (no API key required)
+- Displays: IP Address, Owner/Org, ISP, AS Number, Country, City, Connections, Total Data
+- Statistics panel showing top organizations and countries by IP count
+- Private/RFC1918 IPs automatically identified and skipped (highlighted blue)
+- Failed lookups highlighted in red
+- Results cached in memory — re-lookups are instant for already-resolved IPs
+- **Export to CSV** button to save ownership data
+- Rate-limited to stay within free tier (45 requests/minute, batches of 100 IPs)
 
 ### Time Summary Tab
 - Group data by Hour, Day, or Month
@@ -203,6 +224,7 @@ This tool parses Azure VNET Flow Log v4 format with space-separated fields:
    - `172.16.0.0/12`
    - `192.168.0.0/16`
 4. **Azure Traffic**: Use "Add Azure IP Ranges" to exclude Microsoft datacenter traffic
+5. **IP Ownership**: Run "Lookup All Public IP Owners" to identify who owns external IPs communicating with your network. The owner data carries through to the Flow Logs and IP Summary tabs and persists across filter/search changes.
 
 ## Troubleshooting
 
