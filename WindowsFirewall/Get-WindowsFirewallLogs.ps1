@@ -380,9 +380,24 @@ if ($ExportPath) {
     }
 }
 
-# Exclude ALLOW entries and select only the desired columns
+# Exclude ALLOW entries and select only the desired columns, mapping PID to process name
+$processCache = @{}
 $logEntries = $logEntries | Where-Object { $_.action -ne 'ALLOW' } |
-    Select-Object date, time, action, protocol, 'src-ip', 'dst-ip', 'src-port'
+    Select-Object date, time, action, protocol, 'src-ip', 'dst-ip', 'src-port', pid,
+        @{Name='ProcessName'; Expression={
+            $p = $_.pid
+            if ($p -and $p -ne '-') {
+                if (-not $processCache.ContainsKey($p)) {
+                    try {
+                        $proc = Get-Process -Id ([int]$p) -ErrorAction SilentlyContinue
+                        $processCache[$p] = if ($proc) { $proc.ProcessName } else { '<exited>' }
+                    } catch {
+                        $processCache[$p] = '<exited>'
+                    }
+                }
+                $processCache[$p]
+            } else { '-' }
+        }}
 
 # Display results
 Write-Host "`nRecent Entries (non-ALLOW only):" -ForegroundColor Cyan
