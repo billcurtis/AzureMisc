@@ -25,15 +25,13 @@ try {
     $wfpTempFile = Join-Path $env:TEMP "wfpfilters_$PID.xml"
     $null = & netsh wfp show filters file="$wfpTempFile" 2>&1
     if (Test-Path $wfpTempFile) {
-        # In WFP XML, <displayData><name> appears BEFORE <filterId> within each <item>
+        # WFP XML has: <displayData><name>RuleName</name></displayData> ... <filterId>NNN</filterId>
+        # Nested <item> tags inside <filterCondition>/<flags> do NOT contain <displayData>,
+        # so we simply track the last <displayData><name> seen and map it when <filterId> appears.
         $currentName   = $null
         $inDisplayData = $false
         foreach ($line in [System.IO.File]::ReadLines($wfpTempFile)) {
-            if ($line -match '<item>') {
-                $currentName   = $null
-                $inDisplayData = $false
-            }
-            elseif ($line -match '<displayData>') {
+            if ($line -match '<displayData>') {
                 $inDisplayData = $true
             }
             elseif ($line -match '</displayData>') {
