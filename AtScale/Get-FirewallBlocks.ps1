@@ -25,17 +25,27 @@ try {
     $wfpTempFile = Join-Path $env:TEMP "wfpfilters_$PID.xml"
     $null = & netsh wfp show filters file="$wfpTempFile" 2>&1
     if (Test-Path $wfpTempFile) {
-        [xml]$wfpXml = Get-Content $wfpTempFile -Raw
-        Remove-Item $wfpTempFile -Force -ErrorAction SilentlyContinue
-        # Find all filter items regardless of XML nesting depth
-        $items = $wfpXml.SelectNodes('//item[filterId]')
-        foreach ($item in $items) {
-            $fid = $item.filterId
-            $fname = $item.displayData.name
-            if ($fid -and $fname -and $fname -ne '') {
-                $ruleLookup[$fid] = $fname
+        # Stream-parse the XML line by line to handle large files
+        $currentFilterId = $null
+        $inDisplayData   = $false
+        foreach ($line in [System.IO.File]::ReadLines($wfpTempFile)) {
+            if ($line -match '<filterId>(\d+)</filterId>') {
+                $currentFilterId = $Matches[1]
+                $inDisplayData   = $false
+            }
+            elseif ($line -match '<displayData>') {
+                $inDisplayData = $true
+            }
+            elseif ($inDisplayData -and $currentFilterId -and $line -match '<name>(.*?)</name>') {
+                $ruleLookup[$currentFilterId] = $Matches[1]
+                $currentFilterId = $null
+                $inDisplayData   = $false
+            }
+            elseif ($line -match '</displayData>') {
+                $inDisplayData = $false
             }
         }
+        Remove-Item $wfpTempFile -Force -ErrorAction SilentlyContinue
         Write-Host "  Loaded $($ruleLookup.Count) WFP filter-to-rule mappings."
     } else {
         Write-Host "  Warning: netsh wfp show filters did not produce output."
