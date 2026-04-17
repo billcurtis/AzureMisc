@@ -18,21 +18,30 @@ $ScriptDir  = if ($PSScriptRoot) { $PSScriptRoot } else { $PWD.Path }
 $OutputFile = Join-Path $ScriptDir "FirewallBlocks_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
 $LookbackMinutes = 60
 
-# ── Build a FilterRTID -> Rule DisplayName lookup ─────────────────────────────
-Write-Host "Building firewall rule lookup table..."
+# ── Build a FilterRTID -> Rule DisplayName lookup via WFP filter dump ─────────
+Write-Host "Building WFP filter lookup table (this may take a moment)..."
 $ruleLookup = @{}
 try {
-    $rules = Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop
-    foreach ($rule in $rules) {
-        try {
-            $filters = $rule | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
-            # The rule's InstanceID is what we can correlate; store by name for output
-        } catch {}
-        $ruleLookup[$rule.InstanceID] = $rule.DisplayName
+    $wfpTempFile = Join-Path $env:TEMP "wfpfilters_$PID.xml"
+    $null = & netsh wfp show filters file="$wfpTempFile" 2>&1
+    if (Test-Path $wfpTempFile) {
+        [xml]$wfpXml = Get-Content $wfpTempFile -Raw
+        Remove-Item $wfpTempFile -Force -ErrorAction SilentlyContinue
+        # Find all filter items regardless of XML nesting depth
+        $items = $wfpXml.SelectNodes('//item[filterId]')
+        foreach ($item in $items) {
+            $fid = $item.filterId
+            $fname = $item.displayData.name
+            if ($fid -and $fname -and $fname -ne '') {
+                $ruleLookup[$fid] = $fname
+            }
+        }
+        Write-Host "  Loaded $($ruleLookup.Count) WFP filter-to-rule mappings."
+    } else {
+        Write-Host "  Warning: netsh wfp show filters did not produce output."
     }
-    Write-Host "  Loaded $($ruleLookup.Count) firewall rules."
 } catch {
-    Write-Host "  Warning: Could not enumerate firewall rules: $_"
+    Write-Host "  Warning: Could not enumerate WFP filters: $_"
 }
 
 # ── Query Security log for WFP block events ──────────────────────────────────
