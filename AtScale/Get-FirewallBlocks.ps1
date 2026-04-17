@@ -25,24 +25,27 @@ try {
     $wfpTempFile = Join-Path $env:TEMP "wfpfilters_$PID.xml"
     $null = & netsh wfp show filters file="$wfpTempFile" 2>&1
     if (Test-Path $wfpTempFile) {
-        # Stream-parse the XML line by line to handle large files
-        $currentFilterId = $null
-        $inDisplayData   = $false
+        # In WFP XML, <displayData><name> appears BEFORE <filterId> within each <item>
+        $currentName   = $null
+        $inDisplayData = $false
         foreach ($line in [System.IO.File]::ReadLines($wfpTempFile)) {
-            if ($line -match '<filterId>(\d+)</filterId>') {
-                $currentFilterId = $Matches[1]
-                $inDisplayData   = $false
+            if ($line -match '<item>') {
+                $currentName   = $null
+                $inDisplayData = $false
             }
             elseif ($line -match '<displayData>') {
                 $inDisplayData = $true
             }
-            elseif ($inDisplayData -and $currentFilterId -and $line -match '<name>(.*?)</name>') {
-                $ruleLookup[$currentFilterId] = $Matches[1]
-                $currentFilterId = $null
-                $inDisplayData   = $false
-            }
             elseif ($line -match '</displayData>') {
                 $inDisplayData = $false
+            }
+            elseif ($inDisplayData -and $line -match '<name>(.*?)</name>') {
+                $currentName = $Matches[1]
+            }
+            elseif ($line -match '<filterId>(\d+)</filterId>') {
+                if ($currentName) {
+                    $ruleLookup[$Matches[1]] = $currentName
+                }
             }
         }
         Remove-Item $wfpTempFile -Force -ErrorAction SilentlyContinue
