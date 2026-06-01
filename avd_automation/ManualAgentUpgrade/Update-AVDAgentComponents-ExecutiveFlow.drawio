@@ -1,0 +1,127 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="AVD Agent Upgrade - Executive Flow" id="execflow">
+    <mxGraphModel dx="1422" dy="857" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="AVD Session Host Agent Upgrade&#xa;Operational Flow (Executive View)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#1F3864;" vertex="1" parent="1">
+          <mxGeometry x="320" y="20" width="540" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="Keeps each AVD session host running the latest Microsoft-published agent components automatically, efficiently, and with a full audit trail." style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=2;fontColor=#404040;" vertex="1" parent="1">
+          <mxGeometry x="180" y="68" width="820" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="10" value="1. Validate" style="text;html=1;strokeColor=none;fillColor=#E7F1FB;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#1F3864;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="2. Assess" style="text;html=1;strokeColor=none;fillColor=#E7F1FB;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#1F3864;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="3. Decide" style="text;html=1;strokeColor=none;fillColor=#E7F1FB;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#1F3864;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="540" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="4. Act" style="text;html=1;strokeColor=none;fillColor=#E7F1FB;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#1F3864;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="680" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="14" value="5. Report" style="text;html=1;strokeColor=none;fillColor=#E7F1FB;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#1F3864;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="860" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="20" value="Script launched on&#xa;AVD Session Host" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="120" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="Validate environment&#xa;(elevated rights + correct host type)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="220" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="22" value="Stop with clear error.&#xa;No changes made." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="220" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="23" value="For each AVD agent component&#xa;(Agent + Boot Loader)" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="350" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="24" value="What version is&#xa;currently installed?" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="260" y="450" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="25" value="What version does Microsoft&#xa;currently publish?&#xa;(lightweight metadata check)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="720" y="450" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="26" value="Is the host already&#xa;running the latest version?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="560" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="27" value="No action required.&#xa;Record &quot;Up to date&quot;." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="580" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="28" value="Download latest installer&#xa;from Microsoft" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="180" y="700" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="29" value="Briefly stop the&#xa;related Windows service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="440" y="700" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="30" value="Install update silently&#xa;(no user interaction, no reboot)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="680" y="700" width="240" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="31" value="Restart service and&#xa;record install outcome" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="440" y="780" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="32" value="Write run log + transcript,&#xa;print per-component summary,&#xa;exit code reflects success/failure&#xa;(consumable by Intune / Azure Run Command)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="880" width="320" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="33" value="End" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="1000" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="40" value="Efficiency&#xa;A small metadata request determines the latest version without downloading the installer. A 24-hour cache means routine runs make virtually no network calls when everything is current." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;dashed=1;fontSize=11;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="980" y="440" width="160" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="41" value="Safety&#xa;Pre-flight checks prevent the script from running anywhere it shouldn't. Service is restarted after each install. All actions are logged with timestamps." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;dashed=1;fontSize=11;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="20" y="220" width="180" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="42" value="Business outcome&#xa;Session hosts stay current on supported AVD agents without manual touch, reducing Health Check failures, support tickets, and user-impacting outages." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;dashed=1;fontSize=11;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="780" y="880" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="100" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;" edge="1" parent="1" source="20" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="101" value="Fail" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#B85450;strokeWidth=2;fontSize=11;fontStyle=1;" edge="1" parent="1" source="21" target="22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="102" value="Pass" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#82B366;strokeWidth=2;fontSize=11;fontStyle=1;" edge="1" parent="1" source="21" target="23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="103" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="23" target="24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="104" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="23" target="25">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="105" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="24" target="26">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="106" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="25" target="26">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="107" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#82B366;strokeWidth=2;fontSize=11;fontStyle=1;" edge="1" parent="1" source="26" target="27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="108" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#D79B00;strokeWidth=2;fontSize=11;fontStyle=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="26" target="28">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="109" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;" edge="1" parent="1" source="28" target="29">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="110" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;" edge="1" parent="1" source="29" target="30">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="111" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="30" target="31">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="112" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;" edge="1" parent="1" source="27" target="32">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="113" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;" edge="1" parent="1" source="31" target="32">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="114" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeColor=#404040;strokeWidth=2;" edge="1" parent="1" source="32" target="33">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
